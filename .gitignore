@@ -1,0 +1,28 @@
+# Weights
+models/*.pth
+models/*.pt
+
+# Pycache
+__pycache__/
+*.pyc
+*.pyo
+
+# Venv
+venv/
+.venv/
+env/
+
+# Streamlit cache
+.streamlit/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temp Files
+*.tmp
+*.log
