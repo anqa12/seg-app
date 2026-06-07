@@ -1,0 +1,12 @@
+streamlit~=1.58.0
+torch~=2.12.0
+segmentation-models-pytorch
+numpy~=2.4.6
+Pillow~=12.2.0
+opencv-python-headless
+rasterio
+matplotlib
+pandas~=3.0.3
+requests
+streamlit-folium
+scipy~=1.17.1

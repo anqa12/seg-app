@@ -1,47 +1,47 @@
-# 🛰️ Segmentacja semantyczna obrazów teledetekcyjnych
+# 🛰️ Semantic Segmentation of Remote Sensing Images
 
-Interaktywna aplikacja webowa do testowania modeli segmentacji semantycznej wytrenowanych na wysokorozdzielczych zdjęciach lotniczych i satelitarnych.
+An interactive web application for testing semantic segmentation models trained on high-resolution aerial and satellite imagery.
 
-## Opis
+## Overview
 
-Aplikacja pozwala na:
-- segmentację semantyczną zdjęć lotniczych (LandCover.ai, 25 cm/px) i satelitarnych (BigEarthNet, 10 m/px)
-- testowanie wpływu rozdzielczości na jakość segmentacji (od 25 cm/px do 10 m/px)
-- porównanie wyników wielu modeli na tym samym zdjęciu
-- porównanie predykcji z maską Ground Truth (dla zdjęć testowych) wraz z metrykami IoU i F1 per klasa
-- wgranie własnego zdjęcia (JPG, PNG, TIF) z automatycznym wykryciem rozdzielczości z metadanych GeoTIFF
+This app allows you to:
+- Perform semantic segmentation on aerial images (LandCover.ai, 25 cm/px) and satellite images (BigEarthNet, 10 m/px)
+- Test the effect of spatial resolution on segmentation quality (from 25 cm/px down to 10 m/px)
+- Compare multiple models on the same image side by side
+- Compare model predictions against Ground Truth masks (for test images) with per-class IoU and F1 metrics
+- Upload your own image (JPG, PNG, TIF) with automatic resolution detection from GeoTIFF metadata
 
-## Klasy segmentacji
+## Segmentation Classes
 
-| Klasa | Kolor |
+| Class | Color |
 |-------|-------|
-| Tło | ⬛ czarny |
-| Zabudowa | 🟫 brązowy |
-| Lasy | 🟩 zielony |
-| Woda | 🟦 niebieski |
-| Drogi | ⬜ szary |
+| Background | ⬛ black |
+| Buildings | 🟫 brown |
+| Forest | 🟩 green |
+| Water | 🟦 blue |
+| Roads | ⬜ gray |
 
-## Modele
+## Models
 
-| Model | Enkoder | Datasset treningowy | Tile |
-|-------|---------|---------------------|------|
+| Model | Encoder | Training Dataset | Tile Size |
+|-------|---------|-----------------|-----------|
 | UNet | ResNet34 | LandCover.ai | 512 px |
 | DeepLabV3+ | ResNet50 | LandCover.ai | 512 px |
 | SegFormer | MiT-B2 | LandCover.ai | 512 px |
 | UNet | ResNet34 | BigEarthNet | 120 px |
 
-## Struktura projektu
+## Project Structure
 
 ```
 .
-├── app.py                  # Strona główna (Streamlit entry point)
+├── app.py                  # Main page (Streamlit entry point)
 ├── pages/
-│   └── segmentacja.py      # Strona segmentacji
+│   └── segmentacja.py      # Segmentation page
 ├── utils/
-│   ├── config.py           # Konfiguracja: klasy, modele, rozdzielczości, zdjęcia testowe
-│   ├── display.py          # Funkcje renderujące wyniki w Streamlit
-│   ├── inference.py        # Preprocessing, predykcja kafelkowa z Gaussian blending
-│   └── models.py           # Ładowanie modeli PyTorch
+│   ├── config.py           # Configuration: classes, models, resolutions, sample images
+│   ├── display.py          # Streamlit rendering functions
+│   ├── inference.py        # Preprocessing, tiled prediction with Gaussian blending
+│   └── models.py           # PyTorch model loading
 ├── models/
 │   ├── unet_best.pth
 │   ├── deeplab_best.pth
@@ -50,37 +50,37 @@ Aplikacja pozwala na:
 ├── assets/
 │   └── samples/
 │       ├── landcover/
-│       │   ├── images/     # Zdjęcia testowe LandCover.ai (.jpg)
-│       │   └── masks/      # Maski GT LandCover.ai (.png, wartości 0–4)
+│       │   ├── images/     # LandCover.ai test images (.jpg)
+│       │   └── masks/      # LandCover.ai GT masks (.png, values 0–4)
 │       └── bigearthnet/
-│           ├── images/     # Zdjęcia testowe BigEarthNet (.jpg)
-│           └── masks/      # Maski GT BigEarthNet (.png, wartości 0–4)
+│           ├── images/     # BigEarthNet test images (.jpg)
+│           └── masks/      # BigEarthNet GT masks (.png, values 0–4)
 └── requirements.txt
 ```
 
-## Instalacja i uruchomienie
+## Installation
 
-### Wymagania
+### Requirements
 
 - Python 3.10+
 - pip
 
-### Krok 1 — sklonuj repozytorium
+### Step 1 — Clone the repository
 
 ```bash
-git clone https://github.com/<twoj-login>/<nazwa-repo>.git
-cd <nazwa-repo>
+git clone https://github.com/<your-username>/<repo-name>.git
+cd <repo-name>
 ```
 
-### Krok 2 — zainstaluj zależności
+### Step 2 — Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Krok 3 — dodaj wagi modeli
+### Step 3 — Add model weights
 
-Skopiuj pliki `.pth` do folderu `models/`:
+Copy the `.pth` files into the `models/` folder:
 
 ```
 models/unet_best.pth
@@ -89,27 +89,27 @@ models/segformer_best.pth
 models/unet_bigearthnet_best.pth
 ```
 
-> Wagi modeli nie są przechowywane w repozytorium ze względu na rozmiar.
-> Skontaktuj się z autorką lub pobierz z udostępnionego linku.
+> Model weights are not stored in the repository due to file size.
+> Download them from the shared link provided separately.
 
-### Krok 4 — uruchom aplikację
+### Step 4 — Run the app
 
 ```bash
 streamlit run app.py
 ```
 
-Aplikacja otworzy się w przeglądarce pod adresem `http://localhost:8501`.
+The app will open in your browser at `http://localhost:8501`.
 
-## Szczegóły techniczne
+## Technical Details
 
-### Predykcja kafelkowa (Gaussian blending)
+### Tiled Prediction with Gaussian Blending
 
-Dla dużych zdjęć model działa kafelkowo z nakładaniem (overlap). Każdy kafelek jest ważony dwuwymiarowym oknem Gaussa — piksele przy krawędziach kafelka mają mniejszą wagę niż piksele centralne. Przed sumowaniem głosów stosowany jest softmax, dzięki czemu uśrednianie odbywa się w przestrzeni prawdopodobieństw a nie surowych logitów. Eliminuje to artefakty na granicach kafelków.
+For large images the model operates tile by tile with configurable overlap. Each tile is weighted by a 2D Gaussian window — pixels near tile edges receive lower weight than central pixels. Softmax is applied before accumulating votes so that averaging happens in probability space rather than over raw logits. This eliminates visible seam artefacts at tile boundaries.
 
-### Skalowanie rozdzielczości
+### Resolution Scaling
 
-Scale obliczany jest dynamicznie na podstawie natywnej rozdzielczości wejściowego zdjęcia odczytanej z metadanych GeoTIFF. Dla zdjęć bez metadanych zakładana jest rozdzielczość 25 cm/px. Obraz jest przycinany do wielokrotności 32 px (wymóg architektury U-Net z ResNet34: 2⁵ = 32).
+The scale factor is computed dynamically from the native resolution of the input image read from GeoTIFF metadata. For images without metadata, 25 cm/px is assumed. The image is cropped to a multiple of 32 px, which is required by the U-Net architecture with ResNet34 encoder (5 pooling levels: 2⁵ = 32).
 
-## Autorka
-Anna Grygar
-Praca inżynierska — Informatyka, Wydział Matematyki Stosowanej, Politechnika Śląska
+## Author
+Anna Grygar <br>
+Engineering thesis — Informatics, Faculty of Applied Mathematics, Silesian University of Technology

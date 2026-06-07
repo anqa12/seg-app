@@ -5,11 +5,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="20f39156-6435-44e2-8009-10ca6058d267" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,7 +57,7 @@
   "keyToString": {
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "main",
-    "last_opened_file_path": "/Users/anqa_12/PycharmProjects/seg-app",
+    "last_opened_file_path": "/Users/anqa_12/PycharmProjects/seg-app/assets/samples/bigearthnet/masks",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -52,9 +68,13 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/masks" />
+      <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/images" />
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets/samples/landcover" />
+      <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/images" />
       <recent name="$PROJECT_DIR$" />
     </key>
   </component>
@@ -74,7 +94,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1780737033046</updated>
-      <workItem from="1780737035270" duration="1518000" />
+      <workItem from="1780737035270" duration="5628000" />
     </task>
     <servers />
   </component>
