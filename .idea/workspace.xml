@@ -5,27 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="20f39156-6435-44e2-8009-10ca6058d267" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/config.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/display.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/inference.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-33-20-D-d-3-3_99_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-33-20-D-d-3-3_99.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-32-B-b-1-3_262_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-32-B-b-1-3_262.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-51-C-d-4-1_18_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-51-C-d-4-1_18.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-56-A-b-1-4_243_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-56-A-b-1-4_243.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-65-D-d-4-1_18_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-65-D-d-4-1_18.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-65-D-d-4-1_24_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/M-34-65-D-d-4-1_24.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-130-A-d-4-4_139_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-130-A-d-4-4_139.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-60-D-c-4-2_40_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-60-D-c-4-2_40.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-60-D-d-1-2_37_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/N-33-60-D-d-1-2_37.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/landcover/masks/N-34-140-A-d-4-2_309_m.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/landcover/masks/N-34-140-A-d-4-2_309.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -94,7 +89,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1780737033046</updated>
-      <workItem from="1780737035270" duration="5628000" />
+      <workItem from="1780737035270" duration="9032000" />
     </task>
     <servers />
   </component>
