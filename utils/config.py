@@ -30,7 +30,7 @@ RESOLUTIONS = {
 }
 
 
-def _load_samples(dataset: str, res_m: float = 0.25) -> dict:
+def _load_samples(dataset: str, source_res: float = 0.25) -> dict:
     """
     Automatycznie wczytuje wszystkie zdjęcia z assets/samples/<dataset>/images/
     i dopasowuje maski z assets/samples/<dataset>/masks/ po nazwie pliku.
@@ -60,12 +60,13 @@ def _load_samples(dataset: str, res_m: float = 0.25) -> dict:
             "img":  img_path,
             "mask": mask_path,
             "desc": f"{stem} — {dataset}",
+            "source_res": source_res,
         }
 
     return samples
 
 
 SAMPLE_IMAGES = {
-    "LandCover":   _load_samples("landcover"),
-    "BigEarthNet": _load_samples("bigearthnet"),
+    "LandCover":   _load_samples("landcover", source_res=0.25),
+    "BigEarthNet": _load_samples("bigearthnet", source_res=10.0),
 }

@@ -5,23 +5,21 @@ from utils.config import NUM_CLASSES, MODELS
 
 
 def _build_model(encoder_key: str):
-
     if encoder_key == "unet_resnet34":
         return smp.Unet(encoder_name="resnet34", encoder_weights=None,
                         in_channels=3, classes=NUM_CLASSES)
     elif encoder_key == "deeplab_resnet50":
         return smp.DeepLabV3Plus(encoder_name="resnet50", encoder_weights=None,
-                                  in_channels=3, classes=NUM_CLASSES)
-    elif encoder_key == "segformer":
-        return smp.create_model("segformer_mit-b2", encoder_weights=None,
                                  in_channels=3, classes=NUM_CLASSES)
+    elif encoder_key == "segformer":
+        return smp.create_model("segformer", encoder_weights=None,
+                                in_channels=3, classes=NUM_CLASSES)
     else:
         raise ValueError(f"Nieznany encoder: {encoder_key}")
 
 
 @st.cache_resource(show_spinner=False)
 def load_model(model_name: str):
-
     cfg = MODELS[model_name]
     model = _build_model(cfg["encoder"])
     try:

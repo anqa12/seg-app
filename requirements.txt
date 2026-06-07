@@ -3,7 +3,7 @@ torch~=2.12.0
 segmentation-models-pytorch
 numpy~=2.4.6
 Pillow~=12.2.0
-opencv-python-headless
+opencv-python
 rasterio
 matplotlib
 pandas~=3.0.3

@@ -8,12 +8,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config import MODELS, RESOLUTIONS, SAMPLE_IMAGES, CLASS_HEX, CLASSES
 from utils.models import load_model
-from utils.inference import load_image_from_upload, load_mask_from_path
-# from utils.inference import rescale, predict, load_image_from_upload
-# from utils.display import (render_result_block, render_resolution_comparison,
-#                            render_model_comparison, render_gt_comparison,
-#                            render_metrics_table, load_mask_from_path,
-#                            class_percentages)
+from utils.inference import rescale, predict, load_image_from_upload
+from utils.display import (render_result_block, render_resolution_comparison,
+                           render_model_comparison, render_gt_comparison,
+                           load_mask_from_path)
 
 st.set_page_config(page_title="Segmentacja", page_icon="🔍", layout="wide")
 
@@ -28,7 +26,7 @@ st.title("Segmentacja semantyczna")
 st.markdown("---")
 
 # session state
-if "source_res" not in st.session_state: st.session_state["source_res"] = 0.25
+if "source_res"  not in st.session_state: st.session_state["source_res"]  = 0.25
 if "img_np" not in st.session_state: st.session_state["img_np"] = None
 if "mask_gt" not in st.session_state: st.session_state["mask_gt"] = None
 if "resolutions" not in st.session_state: st.session_state["resolutions"] = dict(RESOLUTIONS)
@@ -75,7 +73,7 @@ with tab_sample:
         info = SAMPLE_IMAGES[chosen_ds][chosen]
         if os.path.exists(info["img"]):
             st.session_state["img_np"] = np.array(Image.open(info["img"]).convert("RGB"))
-            st.session_state["source_res"] = 0.25
+            st.session_state["source_res"] = info.get("source_res", 0.25)
             # import gt if exists
             mask_path = info.get("mask")
             if mask_path and os.path.exists(mask_path):
@@ -141,6 +139,7 @@ st.markdown("---")
 st.subheader("Wybierz ustawienia")
 
 available_resolutions = list(st.session_state["resolutions"].keys())
+default_res = [available_resolutions[0]]
 
 if st.session_state.get("img_source") == "upload" and source_res != 0.25:
     native_label = f"Natywna ({source_res:.4f} m/px)"
@@ -149,6 +148,7 @@ if st.session_state.get("img_source") == "upload" and source_res != 0.25:
         available_resolutions = list(st.session_state["resolutions"].keys())
     if native_label not in available_resolutions:
         available_resolutions.insert(0, native_label)
+    default_res = [native_label]
 
 col_m, col_r, col_v = st.columns([2, 2, 1])
 
@@ -156,7 +156,7 @@ with col_m:
     st.markdown("**Model / Modele**")
     st.caption("Wybierz jeden (porównanie rozdzielczości) lub wiele (porównanie modeli)")
     selected_models = st.multiselect(
-        "", list(MODELS.keys()),
+        "Modele", list(MODELS.keys()),
         default=[list(MODELS.keys())[0]],
         label_visibility="collapsed"
     )
@@ -165,8 +165,8 @@ with col_r:
     st.markdown("**Rozdzielczość / Rozdzielczości**")
     st.caption("Wybierz jedną lub więcej do porównania")
     selected_res = st.multiselect(
-        "", available_resolutions,
-        default=[available_resolutions[0]],
+        "Rozdzielczości", available_resolutions,
+        default=default_res,
         label_visibility="collapsed"
     )
 
@@ -207,4 +207,67 @@ def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
 
+# one model, few scales
+if n_m == 1 and n_r >= 1:
+    model_name = selected_models[0]
+    with st.spinner(f"Ładowanie modelu {model_name}…"):
+        model = load_model(model_name)
+        tile_size = MODELS[model_name]["tile"]
+        overlap = MODELS[model_name].get("overlap", global_overlap)
 
+    if model is None:
+        st.stop()
+
+    results = []
+    for res_label in selected_res:
+        actual_scale = calculate_actual_scale(res_label, source_res)
+        img_s = rescale(img_np, actual_scale, tile_size)
+        mask = predict(model, img_s, tile_size=tile_size, overlap=overlap,
+                        progress_label=f"[{res_label}]")
+        if mask is None:
+            continue
+        results.append({"label": res_label, "img": img_s, "mask": mask, "metrics": None})
+
+    if not results:
+        st.stop()
+
+    if n_r == 1:
+        r = results[0]
+        if mask_gt is not None:
+            # compare result with gt
+            render_gt_comparison(r["img"], r["mask"], mask_gt, alpha,
+                                 label=f"{model_name} · {r['label']} · "
+                                       f"{r['img'].shape[1]}×{r['img'].shape[0]} px")
+        else:
+            render_result_block(r["img"], r["mask"], alpha,
+                                label=f"{model_name} · {r['label']} · "
+                                      f"{r['img'].shape[1]}×{r['img'].shape[0]} px")
+    else:
+        # more scales
+        render_resolution_comparison(results, alpha, mask_gt=mask_gt)
+
+# a couple of models, one scale
+elif n_r == 1 and n_m > 1:
+    res_label = selected_res[0]
+    actual_scale = calculate_actual_scale(res_label, source_res)
+
+    model_results = {}
+    for model_name in selected_models:
+        ts = MODELS[model_name]["tile"]
+        overlap = MODELS[model_name].get("overlap", global_overlap)
+
+        with st.spinner(f"Ładowanie {model_name}…"):
+            model = load_model(model_name)
+        if model is None:
+            continue
+
+        img_s = rescale(img_np, actual_scale, ts)
+        mask = predict(model, img_s, tile_size=ts, overlap=overlap,
+                        progress_label=f"[{model_name}]")
+        if mask is not None:
+            model_results[model_name] = mask
+
+    if model_results:
+        first_ts = MODELS[selected_models[0]]["tile"]
+        img_input = rescale(img_np, actual_scale, first_ts)
+        render_model_comparison(img_input, model_results, alpha, mask_gt=mask_gt)
