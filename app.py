@@ -37,7 +37,7 @@ st.markdown("""
 <div style="display:inline-flex;align-items:center;gap:6px;
      background:rgba(128,128,128,0.08);border:0.5px solid rgba(128,128,128,0.2);
      border-radius:20px;padding:4px 12px;font-size:12px;color:gray;margin-bottom:1.5rem">
-  🛰️ &nbsp; Praca inżynierska 2026
+   Projekt inżynierski
 </div>
 """, unsafe_allow_html=True)
 

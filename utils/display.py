@@ -99,7 +99,7 @@ def render_metrics_table(metrics: dict):
     styled = (df.style
                 .map(color_val, subset=numeric_cols)
                 .format({c: "{:.4f}" for c in numeric_cols}))
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(styled, width="stretch", hide_index=True)
 
 
 # GT comparison
