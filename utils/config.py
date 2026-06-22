@@ -14,11 +14,17 @@ CLASS_COLORS = np.array([
 CLASS_HEX = ["#000000", "#8B5A2B", "#228B22", "#4169E1", "#C0C0C0"]
 
 MODELS = {
-    "UNet — LandCover": {"path": "models/unet_best.pth", "encoder": "unet_resnet34", "tile": 512},
-    "DeepLabV3+ — LandCover": {"path": "models/deeplab_best.pth", "encoder": "deeplab_resnet50", "tile": 512},
-    "SegFormer — LandCover": {"path": "models/segformer_best.pth", "encoder": "segformer", "tile": 512},
-    "UNet — BigEarthNet": {"path": "models/unet_bigearthnet_best.pth", "encoder": "unet_resnet34", "tile": 120},
+    "UNet — LandCover": {"path": "models/landcover/unet_best.pth", "encoder": "unet_resnet34", "tile": 512},
+    "DeepLabV3+ — LandCover": {"path": "models/landcover/deeplab_best.pth", "encoder": "deeplab_resnet34", "tile": 512},
+    "SegFormer — LandCover":   {"path": "models/landcover/segformer_best.pth", "encoder": "segformer_mit_b2", "tile": 512},
+
+    "UNet — BigEarthNet": {"path": "models/bigearthnet/unet_ben_best.pth", "encoder": "unet_resnet34", "tile": 120},
+    "DeepLabV3+ — BigEarthNet": {"path": "models/bigearthnet/deeplab_ben_best.pth", "encoder": "deeplab_resnet34", "tile": 120},
+    "SegFormer — BigEarthNet": {"path": "models/bigearthnet/segformer_ben_best.pth", "encoder": "segformer_mit_b2", "tile": 120},
 }
+
+LANDCOVER_MODELS = [k for k in MODELS if "LandCover" in k]
+BIGEARTHNET_MODELS = [k for k in MODELS if "BigEarthNet" in k]
 
 RESOLUTIONS = {
     "25 cm/px": 0.25,

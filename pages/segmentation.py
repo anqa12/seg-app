@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import cv2
 from PIL import Image
 import os
 import sys
@@ -36,9 +37,7 @@ st.subheader("Wybierz zdjęcie")
 
 tab_sample, tab_upload = st.tabs(["📂 Zdjęcia testowe", "📂 Wgraj własne"])
 
-# ready images tab
 with tab_sample:
-    # datasets division (lc/ben)
     dataset_names = list(SAMPLE_IMAGES.keys())
     inner_tabs = st.tabs([f"🗂 {ds}" for ds in dataset_names])
 
@@ -66,7 +65,6 @@ with tab_sample:
                         st.session_state["chosen_ds"] = dataset_name
                         st.session_state["img_source"] = "sample"
 
-    # import image and gt
     chosen = st.session_state.get("chosen")
     chosen_ds = st.session_state.get("chosen_ds")
     if chosen and chosen_ds and st.session_state.get("img_source") == "sample":
@@ -74,7 +72,9 @@ with tab_sample:
         if os.path.exists(info["img"]):
             st.session_state["img_np"] = np.array(Image.open(info["img"]).convert("RGB"))
             st.session_state["source_res"] = info.get("source_res", 0.25)
-            # import gt if exists
+            # ── NOWE: zapamiętaj z jakiego zbioru pochodzi zdjęcie, do walidacji modelu ──
+            st.session_state["chosen_dataset_type"] = chosen_ds
+
             mask_path = info.get("mask")
             if mask_path and os.path.exists(mask_path):
                 st.session_state["mask_gt"] = load_mask_from_path(mask_path)
@@ -84,7 +84,6 @@ with tab_sample:
         else:
             st.error(f"Brak pliku `{info['img']}`.")
 
-# own image tab
 with tab_upload:
     uploaded = st.file_uploader(
         "Wgraj zdjęcie (JPG, PNG, TIF):",
@@ -95,7 +94,8 @@ with tab_upload:
         if img_np is not None:
             st.session_state["img_source"] = "upload"
             st.session_state["img_np"] = img_np
-            st.session_state["mask_gt"] = None   # no gt for own images
+            st.session_state["mask_gt"] = None
+            st.session_state["chosen_dataset_type"] = None   # nieznany typ — brak walidacji
 
             c_img, c_info = st.columns([3, 1])
             with c_img:
@@ -135,7 +135,6 @@ if img_np is None:
 
 st.markdown("---")
 
-# settings/parameters
 st.subheader("Wybierz ustawienia")
 
 available_resolutions = list(st.session_state["resolutions"].keys())
@@ -161,6 +160,19 @@ with col_m:
         label_visibility="collapsed"
     )
 
+    # ── NOWE: ostrzeżenie gdy model nie pasuje do typu zdjęcia ────────────────
+    chosen_dataset_type = st.session_state.get("chosen_dataset_type")
+    if chosen_dataset_type:
+        mismatched = [
+            m for m in selected_models
+            if chosen_dataset_type.lower() not in m.lower()
+        ]
+        if mismatched:
+            st.caption(
+                f"⚠️ {', '.join(mismatched)} {'nie był' if len(mismatched)==1 else 'nie były'} "
+                f"trenowane na zbiorze **{chosen_dataset_type}** — wyniki mogą być słabe."
+            )
+
 with col_r:
     st.markdown("**Rozdzielczość / Rozdzielczości**")
     st.caption("Wybierz jedną lub więcej do porównania")
@@ -176,6 +188,11 @@ with col_v:
                       label_visibility="collapsed")
     global_overlap = st.slider("Overlap kafelków:", 0.0, 0.5, 0.0, 0.1,
                                help="Używane jeśli model nie narzuca własnego overlapu w config.py")
+    # ── NOWE: przełącznik voting — overlap bez votingu nic nie daje ───────────
+    use_voting = st.checkbox(
+        "Gaussian voting (gładsze granice)", value=(global_overlap > 0),
+        help="Włącz razem z overlap > 0, żeby faktycznie uśredniać nakładające się kafelki."
+    )
 
 n_m, n_r = len(selected_models), len(selected_res)
 if n_m == 0 or n_r == 0:
@@ -197,23 +214,25 @@ else:
 
 st.markdown("---")
 
-# segmentation
 st.subheader("Wyniki segmentacji")
 
 if not st.button("Uruchom segmentację", type="primary", width="stretch"):
     st.stop()
 
+
 def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
 
-# one model, few scales
+
+# ── jeden model, jedna lub wiele rozdzielczości ───────────────────────────────
 if n_m == 1 and n_r >= 1:
     model_name = selected_models[0]
     with st.spinner(f"Ładowanie modelu {model_name}…"):
         model = load_model(model_name)
         tile_size = MODELS[model_name]["tile"]
         overlap = MODELS[model_name].get("overlap", global_overlap)
+        voting = MODELS[model_name].get("use_voting", use_voting)
 
     if model is None:
         st.stop()
@@ -221,11 +240,20 @@ if n_m == 1 and n_r >= 1:
     results = []
     for res_label in selected_res:
         actual_scale = calculate_actual_scale(res_label, source_res)
+
+        # ── NOWE: ostrzeżenie przy dużym powiększeniu zamiast pomniejszenia ───
+        if actual_scale > 1.5:
+            st.caption(
+                f"⚠️ {res_label}: powiększenie {actual_scale:.1f}× "
+                f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
+            )
+
         img_s = rescale(img_np, actual_scale, tile_size)
         mask = predict(model, img_s, tile_size=tile_size, overlap=overlap,
-                        progress_label=f"[{res_label}]")
+                       use_voting=voting, progress_label=f"[{res_label}]")
         if mask is None:
             continue
+
         results.append({"label": res_label, "img": img_s, "mask": mask, "metrics": None})
 
     if not results:
@@ -234,7 +262,6 @@ if n_m == 1 and n_r >= 1:
     if n_r == 1:
         r = results[0]
         if mask_gt is not None:
-            # compare result with gt
             render_gt_comparison(r["img"], r["mask"], mask_gt, alpha,
                                  label=f"{model_name} · {r['label']} · "
                                        f"{r['img'].shape[1]}×{r['img'].shape[0]} px")
@@ -243,18 +270,21 @@ if n_m == 1 and n_r >= 1:
                                 label=f"{model_name} · {r['label']} · "
                                       f"{r['img'].shape[1]}×{r['img'].shape[0]} px")
     else:
-        # more scales
         render_resolution_comparison(results, alpha, mask_gt=mask_gt)
 
-# a couple of models, one scale
+# ── wiele modeli, jedna rozdzielczość ─────────────────────────────────────────
 elif n_r == 1 and n_m > 1:
     res_label = selected_res[0]
     actual_scale = calculate_actual_scale(res_label, source_res)
+
+    if actual_scale > 1.5:
+        st.caption(f"⚠️ {res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
 
     model_results = {}
     for model_name in selected_models:
         ts = MODELS[model_name]["tile"]
         overlap = MODELS[model_name].get("overlap", global_overlap)
+        voting = MODELS[model_name].get("use_voting", use_voting)
 
         with st.spinner(f"Ładowanie {model_name}…"):
             model = load_model(model_name)
@@ -263,7 +293,7 @@ elif n_r == 1 and n_m > 1:
 
         img_s = rescale(img_np, actual_scale, ts)
         mask = predict(model, img_s, tile_size=ts, overlap=overlap,
-                        progress_label=f"[{model_name}]")
+                       use_voting=voting, progress_label=f"[{model_name}]")
         if mask is not None:
             model_results[model_name] = mask
 

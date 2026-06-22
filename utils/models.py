@@ -5,21 +5,32 @@ from utils.config import NUM_CLASSES, MODELS
 
 
 def _build_model(encoder_key: str):
+    """Buduje architekturę na podstawie klucza z config.MODELS."""
     if encoder_key == "unet_resnet34":
-        return smp.Unet(encoder_name="resnet34", encoder_weights=None,
-                        in_channels=3, classes=NUM_CLASSES)
-    elif encoder_key == "deeplab_resnet50":
-        return smp.DeepLabV3Plus(encoder_name="resnet50", encoder_weights=None,
-                                 in_channels=3, classes=NUM_CLASSES)
-    elif encoder_key == "segformer":
-        return smp.create_model("segformer", encoder_weights=None,
-                                in_channels=3, classes=NUM_CLASSES)
+        return smp.Unet(
+            encoder_name="resnet34", encoder_weights=None,
+            in_channels=3, classes=NUM_CLASSES,
+        )
+    elif encoder_key == "deeplab_resnet34":
+        return smp.DeepLabV3Plus(
+            encoder_name="resnet34", encoder_weights=None,
+            in_channels=3, classes=NUM_CLASSES,
+        )
+    elif encoder_key == "segformer_mit_b2":
+        return smp.Segformer(
+            encoder_name="mit_b2", encoder_weights=None,
+            in_channels=3, classes=NUM_CLASSES,
+        )
     else:
         raise ValueError(f"Nieznany encoder: {encoder_key}")
 
 
 @st.cache_resource(show_spinner=False)
 def load_model(model_name: str):
+    """
+    Buduje i ładuje wagi modelu o podanej nazwie z config.MODELS.
+    Cachowane per sesja — każdy model ładuje się tylko raz.
+    """
     cfg = MODELS[model_name]
     model = _build_model(cfg["encoder"])
     try:
