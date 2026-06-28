@@ -9,10 +9,10 @@ from PIL import Image
 import io
 
 
-# ── Gaussian blending window ──────────────────────────────────────────────────
+# gaussian blending
 def _gaussian_window(size, sigma_ratio=0.25):
-    sigma  = size * sigma_ratio
-    y, x   = np.mgrid[0:size, 0:size]
+    sigma = size * sigma_ratio
+    y, x = np.mgrid[0:size, 0:size]
     cy, cx = size / 2.0, size / 2.0
     window = np.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * sigma ** 2))
     return (window / window.max()).astype(np.float32)
@@ -29,9 +29,9 @@ def _get_window(tile_size):
 
 def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
     """Przeskalowuje obraz i przycina do wielokrotności 32 (wymagane przez UNet)."""
-    H, W  = img.shape[:2]
-    H_s   = max(32, int(H * scale))
-    W_s   = max(32, int(W * scale))
+    H, W = img.shape[:2]
+    H_s = max(32, int(H * scale))
+    W_s = max(32, int(W * scale))
     img_s = cv2.resize(img, (W_s, H_s), interpolation=cv2.INTER_AREA)
 
     H_p = (H_s // 32) * 32
@@ -39,7 +39,7 @@ def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
     return img_s[:H_p, :W_p]
 
 
-# ── Predykcja pojedynczego modelu na pełnym obrazie ───────────────────────────
+# predic one model
 def predict(
     model,
     img_np: np.ndarray,
@@ -135,7 +135,7 @@ def predict(
         return (votes / counts[np.newaxis]).argmax(axis=0).astype(np.uint8)
 
 
-# ── Predykcja wielu modeli naraz na tym samym obrazie ─────────────────────────
+# predict more models
 def predict_all_models(
     models_cfg: list[dict],
     img_np: np.ndarray,
@@ -175,7 +175,7 @@ def predict_all_models(
     return all_preds
 
 
-# ── Wczytywanie zdjęcia z uploadu ─────────────────────────────────────────────
+# load image
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
     """Wczytuje obraz z UploadedFile. Zwraca (img_rgb uint8, rozdzielczość_m lub None)."""
     name  = uploaded_file.name.lower()

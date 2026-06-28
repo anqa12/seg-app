@@ -72,7 +72,6 @@ with tab_sample:
         if os.path.exists(info["img"]):
             st.session_state["img_np"] = np.array(Image.open(info["img"]).convert("RGB"))
             st.session_state["source_res"] = info.get("source_res", 0.25)
-            # ── NOWE: zapamiętaj z jakiego zbioru pochodzi zdjęcie, do walidacji modelu ──
             st.session_state["chosen_dataset_type"] = chosen_ds
 
             mask_path = info.get("mask")
@@ -95,7 +94,7 @@ with tab_upload:
             st.session_state["img_source"] = "upload"
             st.session_state["img_np"] = img_np
             st.session_state["mask_gt"] = None
-            st.session_state["chosen_dataset_type"] = None   # nieznany typ — brak walidacji
+            st.session_state["chosen_dataset_type"] = None
 
             c_img, c_info = st.columns([3, 1])
             with c_img:
@@ -160,7 +159,7 @@ with col_m:
         label_visibility="collapsed"
     )
 
-    # ── NOWE: ostrzeżenie gdy model nie pasuje do typu zdjęcia ────────────────
+    # warning if model does not support current dataset
     chosen_dataset_type = st.session_state.get("chosen_dataset_type")
     if chosen_dataset_type:
         mismatched = [
@@ -169,7 +168,7 @@ with col_m:
         ]
         if mismatched:
             st.caption(
-                f"⚠️ {', '.join(mismatched)} {'nie był' if len(mismatched)==1 else 'nie były'} "
+                f"{', '.join(mismatched)} {'nie był' if len(mismatched)==1 else 'nie były'} "
                 f"trenowane na zbiorze **{chosen_dataset_type}** — wyniki mogą być słabe."
             )
 
@@ -188,7 +187,7 @@ with col_v:
                       label_visibility="collapsed")
     global_overlap = st.slider("Overlap kafelków:", 0.0, 0.5, 0.0, 0.1,
                                help="Używane jeśli model nie narzuca własnego overlapu w config.py")
-    # ── NOWE: przełącznik voting — overlap bez votingu nic nie daje ───────────
+    # use overlap checkbox
     use_voting = st.checkbox(
         "Gaussian voting (gładsze granice)", value=(global_overlap > 0),
         help="Włącz razem z overlap > 0, żeby faktycznie uśredniać nakładające się kafelki."
@@ -225,7 +224,7 @@ def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     return source_resolution_m / target_res_m
 
 
-# ── jeden model, jedna lub wiele rozdzielczości ───────────────────────────────
+# one model, one or more resolutions
 if n_m == 1 and n_r >= 1:
     model_name = selected_models[0]
     with st.spinner(f"Ładowanie modelu {model_name}…"):
@@ -241,10 +240,10 @@ if n_m == 1 and n_r >= 1:
     for res_label in selected_res:
         actual_scale = calculate_actual_scale(res_label, source_res)
 
-        # ── NOWE: ostrzeżenie przy dużym powiększeniu zamiast pomniejszenia ───
+        # warning when resizing an image
         if actual_scale > 1.5:
             st.caption(
-                f"⚠️ {res_label}: powiększenie {actual_scale:.1f}× "
+                f"{res_label}: powiększenie {actual_scale:.1f}× "
                 f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
             )
 
@@ -272,13 +271,13 @@ if n_m == 1 and n_r >= 1:
     else:
         render_resolution_comparison(results, alpha, mask_gt=mask_gt)
 
-# ── wiele modeli, jedna rozdzielczość ─────────────────────────────────────────
+# more models, one resolution
 elif n_r == 1 and n_m > 1:
     res_label = selected_res[0]
     actual_scale = calculate_actual_scale(res_label, source_res)
 
     if actual_scale > 1.5:
-        st.caption(f"⚠️ {res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
+        st.caption(f"{res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
 
     model_results = {}
     for model_name in selected_models:

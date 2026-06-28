@@ -5,17 +5,56 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="20f39156-6435-44e2-8009-10ca6058d267" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/models/bigearthnet/deeplab_ben_best.pth" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/bigearthnet/segformer_ben_best.pth" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/bigearthnet/unet_ben_best.pth" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/landcover/deeplab_best.pth" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/landcover/segformer_best.pth" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/landcover/unet_best.pth" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_53_82.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_56_65.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_61_53.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_70_16.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_18.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_45.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_75_52.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_17_59.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_58_67.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_72_65.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_09_81.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_36.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_69.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_45_33.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_73_20.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_80_79.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_53_82.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_56_65.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_61_53.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_70_16.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_18.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_45.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_75_52.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_72_65.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_09_81.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_36.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_69.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_45_33.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_73_20.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_80_79.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_71_25.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_83_18.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_55_76.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_25_45.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_47_86.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_17_59.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_48_74.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_58_67.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_49_62.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_79_90.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/inference.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/models.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,7 +90,7 @@
     "Python.segmentation.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "feature/backend",
-    "last_opened_file_path": "/Users/anqa_12/PycharmProjects/seg-app/models/landcover",
+    "last_opened_file_path": "/Users/anqa_12/PycharmProjects/seg-app/assets/samples/bigearthnet/masks",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -62,13 +101,14 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/models/landcover" />
-      <recent name="$PROJECT_DIR$/models/bigearthnet" />
       <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/masks" />
       <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/images" />
+      <recent name="$PROJECT_DIR$/models/landcover" />
+      <recent name="$PROJECT_DIR$/models/bigearthnet" />
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets/samples" />
       <recent name="$PROJECT_DIR$/assets/samples/landcover" />
       <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/images" />
       <recent name="$PROJECT_DIR$" />
@@ -92,7 +132,8 @@
       <updated>1780737033046</updated>
       <workItem from="1780737035270" duration="9032000" />
       <workItem from="1781255210880" duration="2000" />
-      <workItem from="1782041492188" duration="4708000" />
+      <workItem from="1782041492188" duration="12209000" />
+      <workItem from="1782166470264" duration="2927000" />
     </task>
     <servers />
   </component>

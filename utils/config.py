@@ -18,9 +18,9 @@ MODELS = {
     "DeepLabV3+ — LandCover": {"path": "models/landcover/deeplab_best.pth", "encoder": "deeplab_resnet34", "tile": 512},
     "SegFormer — LandCover":   {"path": "models/landcover/segformer_best.pth", "encoder": "segformer_mit_b2", "tile": 512},
 
-    "UNet — BigEarthNet": {"path": "models/bigearthnet/unet_ben_best.pth", "encoder": "unet_resnet34", "tile": 120},
-    "DeepLabV3+ — BigEarthNet": {"path": "models/bigearthnet/deeplab_ben_best.pth", "encoder": "deeplab_resnet34", "tile": 120},
-    "SegFormer — BigEarthNet": {"path": "models/bigearthnet/segformer_ben_best.pth", "encoder": "segformer_mit_b2", "tile": 120},
+    "UNet — BigEarthNet": {"path": "models/bigearthnet/unet_ben_best.pth", "encoder": "unet_resnet34", "tile": 128},
+    "DeepLabV3+ — BigEarthNet": {"path": "models/bigearthnet/deeplab_ben_best.pth", "encoder": "deeplab_resnet34", "tile": 128},
+    "SegFormer — BigEarthNet": {"path": "models/bigearthnet/segformer_ben_best.pth", "encoder": "segformer_mit_b2", "tile": 128},
 }
 
 LANDCOVER_MODELS = [k for k in MODELS if "LandCover" in k]
