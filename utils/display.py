@@ -199,60 +199,46 @@ def render_resolution_comparison(results: list[dict], alpha: float,
     """
     results: [{"label": str, "img": ndarray, "mask": ndarray, "metrics": dict|None}]
     mask_gt: opcjonalna maska GT — jeśli podana, dodaje wiersz GT i metryki.
+
+    Układ pionowy: każda rozdzielczość to jeden pełny blok (obrazy + pokrycie
+    terenu), bloki ułożone jeden pod drugim.
     """
     n = len(results)
     if n == 0:
         return
 
-    # row - original img
-    st.markdown("##### Wejście modelu")
-    cols = st.columns(n)
-    for col, r in zip(cols, results):
-        col.image(r["img"], width="stretch")
-        col.caption(f"{r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px")
-
-    # row - GT (if available)
-    if mask_gt is not None:
-        st.markdown("##### Ground Truth")
-        cols = st.columns(n)
-        for col, r in zip(cols, results):
-            h, w = r["mask"].shape
-            gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
-            col.image(mask_to_rgb(gt_r), width="stretch")
-            col.caption(r["label"])
-
-    # row - pred mask
-    st.markdown("##### Maska predykcji")
-    cols = st.columns(n)
-    for col, r in zip(cols, results):
-        col.image(mask_to_rgb(r["mask"]), width="stretch")
-        col.caption(r["label"])
-
-    # row - overlay
-    st.markdown("##### Nakładka")
-    cols = st.columns(n)
-    for col, r in zip(cols, results):
-        col.image(overlay(r["img"], r["mask"], alpha), width="stretch")
-        col.caption(r["label"])
-
     render_legend()
 
-    # covering per class
     for r in results:
+        h, w = r["mask"].shape
+        st.markdown(f"#### {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px")
+
+        if mask_gt is not None:
+            gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.image(r["img"], caption="Wejście modelu", width="stretch")
+            c2.image(mask_to_rgb(gt_r), caption="Ground Truth", width="stretch")
+            c3.image(mask_to_rgb(r["mask"]), caption="Predykcja", width="stretch")
+            c4.image(overlay(r["img"], r["mask"], alpha), caption="Nakładka", width="stretch")
+        else:
+            c1, c2, c3 = st.columns(3)
+            c1.image(r["img"], caption="Wejście modelu", width="stretch")
+            c2.image(mask_to_rgb(r["mask"]), caption="Predykcja", width="stretch")
+            c3.image(overlay(r["img"], r["mask"], alpha), caption="Nakładka", width="stretch")
+
         if mask_gt is not None:
             col_gt, col_pred = st.columns(2)
-            h, w = r["mask"].shape
-            gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
             with col_gt:
-                st.markdown(f"**GT — {r['label']}**")
+                st.markdown("**Pokrycie terenu — Ground Truth**")
                 render_coverage_tiles(gt_r)
             with col_pred:
-                st.markdown(f"**Predykcja — {r['label']}**")
+                st.markdown("**Pokrycie terenu — Predykcja**")
                 render_coverage_tiles(r["mask"])
         else:
-            st.markdown(f"**Pokrycie terenu — {r['label']}**")
+            st.markdown("**Pokrycie terenu**")
             render_coverage_tiles(r["mask"])
-        st.markdown("")
+
+        st.markdown("---")
 
     # metrics table
     if mask_gt is not None:
@@ -288,55 +274,48 @@ def render_model_comparison(img_input, model_results: dict, alpha: float,
     """
     model_results: {"Nazwa modelu": mask_array, ...}
     mask_gt: opcjonalna maska GT.
+
+    Układ pionowy: każdy model to jeden pełny blok (obrazy + pokrycie terenu),
+    bloki ułożone jeden pod drugim.
     """
-    n = len(model_results)
-    h, w = list(model_results.values())[0].shape
-
-    st.markdown("##### Wejście modelu")
-    cols = st.columns(n)
-    for col in cols:
-        col.image(img_input[:h, :w], width="stretch")
-
-    if mask_gt is not None:
-        st.markdown("##### Ground Truth")
-        gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
-        cols = st.columns(n)
-        for col in cols:
-            col.image(mask_to_rgb(gt_r), width="stretch")
-
-    st.markdown("##### Maska predykcji")
-    cols = st.columns(n)
-    for col, (name, mask) in zip(cols, model_results.items()):
-        col.image(mask_to_rgb(mask), width="stretch")
-        col.caption(name)
-
-    st.markdown("##### Nakładka")
-    cols = st.columns(n)
-    for col, (name, mask) in zip(cols, model_results.items()):
-        col.image(overlay(img_input, mask, alpha), width="stretch")
-        col.caption(name)
-
     render_legend()
 
     for name, mask in model_results.items():
+        h, w = mask.shape
+        st.markdown(f"#### {name}")
+
         if mask_gt is not None:
             gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.image(img_input[:h, :w], caption="Wejście modelu", width="stretch")
+            c2.image(mask_to_rgb(gt_r), caption="Ground Truth", width="stretch")
+            c3.image(mask_to_rgb(mask), caption="Predykcja", width="stretch")
+            c4.image(overlay(img_input, mask, alpha), caption="Nakładka", width="stretch")
+        else:
+            c1, c2, c3 = st.columns(3)
+            c1.image(img_input[:h, :w], caption="Wejście modelu", width="stretch")
+            c2.image(mask_to_rgb(mask), caption="Predykcja", width="stretch")
+            c3.image(overlay(img_input, mask, alpha), caption="Nakładka", width="stretch")
+
+        if mask_gt is not None:
             col_gt, col_pred = st.columns(2)
             with col_gt:
-                st.markdown(f"**GT — {name}**")
+                st.markdown("**Pokrycie terenu — Ground Truth**")
                 render_coverage_tiles(gt_r)
             with col_pred:
-                st.markdown(f"**Predykcja — {name}**")
+                st.markdown("**Pokrycie terenu — Predykcja**")
                 render_coverage_tiles(mask)
         else:
-            st.markdown(f"**Pokrycie terenu — {name}**")
+            st.markdown("**Pokrycie terenu**")
             render_coverage_tiles(mask)
-        st.markdown("")
+
+        st.markdown("---")
 
     if mask_gt is not None:
         with st.expander("Metryki per model", expanded=True):
             rows = []
             for name, mask in model_results.items():
+                h, w = mask.shape
                 gt_r = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
                 m = _compute_metrics(mask, gt_r)
                 rows.append({

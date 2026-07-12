@@ -5,24 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="20f39156-6435-44e2-8009-10ca6058d267" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/pages/map_tab.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/sample_tab.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/upload_tab.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/components/map_tab.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/components/upload_tab.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/session.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_70_16.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_75_52.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_17_59.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_58_67.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_36.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/images/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_80_79.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_70_16.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170613T101031_N9999_R022_T33UUP_75_52.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_17_59.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170617T113321_N9999_R080_T29UPU_58_67.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_18_36.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/samples/bigearthnet/masks/S2A_MSIL2A_20170813T112121_N9999_R037_T29SNC_80_79.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/map_tab.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/sample_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/components/sample_tab.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/upload_tab.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/display.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/display.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -76,6 +68,7 @@
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/components" />
       <recent name="$PROJECT_DIR$/assets/samples" />
       <recent name="$PROJECT_DIR$/assets/samples/landcover" />
       <recent name="$PROJECT_DIR$/assets/samples/bigearthnet/images" />

@@ -4,7 +4,7 @@ st.set_page_config(
     page_title="Seg-app",
     page_icon="🛰️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown("""
@@ -28,7 +28,6 @@ st.markdown("""
 st.markdown("""
 <style>
 .block-container { padding-top: 3rem; max-width: 720px; }
-[data-testid="stSidebarNav"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 

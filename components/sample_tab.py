@@ -4,7 +4,7 @@ sample_tab.py
 Fragment do wklejenia do segmentation.py jako pierwsza zakładka.
 
 Użycie w segmentation.py:
-    from pages.sample_tab import render_sample_tab
+    from components.sample_tab import render_sample_tab
 
     with tab_sample:
         render_sample_tab()
@@ -17,6 +17,7 @@ from PIL import Image
 
 from utils.config import SAMPLE_IMAGES
 from utils.display import load_mask_from_path
+from utils.session import reset_image_state
 
 
 def render_sample_tab():
@@ -46,6 +47,10 @@ def render_sample_tab():
                     st.caption(info["desc"])
                     if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
                                  width="stretch"):
+                        # Najpierw pełny reset — usuwa stan po mapie/uploadzie
+                        # (podgląd, rozdzielczość "Natywna (...)", maskę GT itd.),
+                        # dopiero potem ustawiamy nowy wybór.
+                        reset_image_state()
                         st.session_state["chosen"] = name
                         st.session_state["chosen_ds"] = dataset_name
                         st.session_state["img_source"] = "sample"
@@ -64,6 +69,19 @@ def render_sample_tab():
                 st.session_state["mask_gt"] = load_mask_from_path(mask_path)
             else:
                 st.session_state["mask_gt"] = None
-            st.success(f"Wybrano: **{chosen}** ({chosen_ds})")
+
+            st.image(st.session_state["img_np"],
+                     caption=f"Wybrane zdjęcie — {st.session_state['img_np'].shape[1]}×"
+                             f"{st.session_state['img_np'].shape[0]} px "
+                             f"({st.session_state['source_res']} m/px)",
+                     width=400)
+            if st.session_state["mask_gt"] is not None:
+                st.success("Maska Ground Truth dostępna — wyniki będą zawierać metryki IoU/F1.")
+            else:
+                st.info("Brak maski GT dla tego zdjęcia.")
+
+            if st.button("🗑️ Usuń wybrane zdjęcie", key="remove_sample"):
+                reset_image_state()
+                st.rerun()
         else:
             st.error(f"Brak pliku `{info['img']}`.")
