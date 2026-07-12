@@ -10,3 +10,5 @@ pandas~=3.0.3
 requests
 streamlit-folium
 scipy~=1.17.1
+folium
+pyproj

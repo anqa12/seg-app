@@ -7,12 +7,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import MODELS, RESOLUTIONS, SAMPLE_IMAGES, CLASS_HEX, CLASSES
+from utils.config import MODELS, RESOLUTIONS, CLASS_HEX, CLASSES
 from utils.models import load_model
-from utils.inference import rescale, predict, load_image_from_upload
+from utils.inference import rescale, predict
 from utils.display import (render_result_block, render_resolution_comparison,
-                           render_model_comparison, render_gt_comparison,
-                           load_mask_from_path)
+                           render_model_comparison, render_gt_comparison)
+from pages.sample_tab import render_sample_tab
+from pages.upload_tab import render_upload_tab
+from pages.map_tab import render_map_tab
 
 st.set_page_config(page_title="Segmentacja", page_icon="🔍", layout="wide")
 
@@ -35,84 +37,18 @@ if "resolutions" not in st.session_state: st.session_state["resolutions"] = dict
 # choose image
 st.subheader("Wybierz zdjęcie")
 
-tab_sample, tab_upload = st.tabs(["📂 Zdjęcia testowe", "📂 Wgraj własne"])
+tab_sample, tab_map, tab_upload = st.tabs([
+    "📂 Zdjęcia testowe", "🗺️ Pobierz z mapy", "⬆️ Wgraj własne"
+])
 
 with tab_sample:
-    dataset_names = list(SAMPLE_IMAGES.keys())
-    inner_tabs = st.tabs([f"🗂 {ds}" for ds in dataset_names])
-
-    for inner_tab, dataset_name in zip(inner_tabs, dataset_names):
-        with inner_tab:
-            samples = SAMPLE_IMAGES[dataset_name]
-            st.caption(f"Zdjęcia testowe ze zbioru **{dataset_name}**")
-            cols = st.columns(len(samples))
-
-            for col, (name, info) in zip(cols, samples.items()):
-                img_path = info["img"]
-                with col:
-                    if os.path.exists(img_path):
-                        st.image(img_path, width="stretch")
-                    else:
-                        st.markdown(
-                            '<div style="height:100px;background:rgba(128,128,128,0.08);'
-                            'border-radius:8px;display:flex;align-items:center;'
-                            'justify-content:center;font-size:11px;color:gray">'
-                            'brak pliku</div>', unsafe_allow_html=True)
-                    st.caption(info["desc"])
-                    if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
-                                 width="stretch"):
-                        st.session_state["chosen"] = name
-                        st.session_state["chosen_ds"] = dataset_name
-                        st.session_state["img_source"] = "sample"
-
-    chosen = st.session_state.get("chosen")
-    chosen_ds = st.session_state.get("chosen_ds")
-    if chosen and chosen_ds and st.session_state.get("img_source") == "sample":
-        info = SAMPLE_IMAGES[chosen_ds][chosen]
-        if os.path.exists(info["img"]):
-            st.session_state["img_np"] = np.array(Image.open(info["img"]).convert("RGB"))
-            st.session_state["source_res"] = info.get("source_res", 0.25)
-            st.session_state["chosen_dataset_type"] = chosen_ds
-
-            mask_path = info.get("mask")
-            if mask_path and os.path.exists(mask_path):
-                st.session_state["mask_gt"] = load_mask_from_path(mask_path)
-            else:
-                st.session_state["mask_gt"] = None
-            st.success(f"Wybrano: **{chosen}** ({chosen_ds})")
-        else:
-            st.error(f"Brak pliku `{info['img']}`.")
+    render_sample_tab()
 
 with tab_upload:
-    uploaded = st.file_uploader(
-        "Wgraj zdjęcie (JPG, PNG, TIF):",
-        type=["jpg", "jpeg", "png", "tif", "tiff"]
-    )
-    if uploaded:
-        img_np, detected_res = load_image_from_upload(uploaded)
-        if img_np is not None:
-            st.session_state["img_source"] = "upload"
-            st.session_state["img_np"] = img_np
-            st.session_state["mask_gt"] = None
-            st.session_state["chosen_dataset_type"] = None
+    render_upload_tab()
 
-            c_img, c_info = st.columns([3, 1])
-            with c_img:
-                st.image(img_np,
-                         caption=f"{uploaded.name} — {img_np.shape[1]}×{img_np.shape[0]} px",
-                         width="stretch")
-            with c_info:
-                if detected_res:
-                    st.success(f"Wykryta rozdzielczość:\n**{detected_res:.4f} m/px**")
-                    st.session_state["source_res"] = detected_res
-                else:
-                    st.warning("Nie wykryto rozdzielczości z metadanych.")
-                    res_label = st.selectbox(
-                        "Podaj rozdzielczość źródłową:",
-                        list(st.session_state["resolutions"].keys()),
-                        key="manual_res"
-                    )
-                    st.session_state["source_res"] = st.session_state["resolutions"][res_label]
+with tab_map:
+    render_map_tab()
 
 img_np = st.session_state.get("img_np")
 mask_gt = st.session_state.get("mask_gt")
@@ -139,14 +75,23 @@ st.subheader("Wybierz ustawienia")
 available_resolutions = list(st.session_state["resolutions"].keys())
 default_res = [available_resolutions[0]]
 
-if st.session_state.get("img_source") == "upload" and source_res != 0.25:
-    native_label = f"Natywna ({source_res:.4f} m/px)"
-    if native_label not in st.session_state["resolutions"]:
-        st.session_state["resolutions"][native_label] = source_res
+if st.session_state.get("img_source") == "upload":
+    # etykieta ustawiona przez map_tab.py, jeśli zdjęcie pochodzi z mapy
+    map_label = st.session_state.get("_map_native_label")
+    if map_label and map_label in st.session_state["resolutions"]:
+        native_label = map_label
+    elif source_res != 0.25:
+        native_label = f"Natywna ({source_res:.4f} m/px)"
+    else:
+        native_label = None
+
+    if native_label:
+        if native_label not in st.session_state["resolutions"]:
+            st.session_state["resolutions"][native_label] = source_res
         available_resolutions = list(st.session_state["resolutions"].keys())
-    if native_label not in available_resolutions:
-        available_resolutions.insert(0, native_label)
-    default_res = [native_label]
+        if native_label not in available_resolutions:
+            available_resolutions.insert(0, native_label)
+        default_res = [native_label]
 
 col_m, col_r, col_v = st.columns([2, 2, 1])
 
