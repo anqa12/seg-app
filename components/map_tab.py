@@ -1,19 +1,3 @@
-"""
-map_tab.py
-----------
-Fragment do wklejenia do segmentation.py jako trzecia zakładka.
-
-Użycie w segmentation.py:
-    from components.map_tab import render_map_tab
-
-    tab_sample, tab_map, tab_upload = st.tabs([
-        "📂 Zdjęcia testowe", "🗺️ Pobierz z mapy", "⬆️ Wgraj własne"
-    ])
-
-    with tab_map:
-        render_map_tab()
-"""
-
 import io
 import requests
 import numpy as np
@@ -31,12 +15,12 @@ except ImportError:
 
 from utils.session import reset_image_state, set_native_resolution
 
-# ── Stałe WMS ────────────────────────────────────────────────────────────────
-WMS_URL     = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution"
-WMS_LAYER   = "Raster"
+# WMS service - geoportal download
+WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution"
+WMS_LAYER = "Raster"
 WMS_VERSION = "1.3.0"
-WMS_CRS     = "EPSG:2180"
-MAX_PX      = 4096   # limit pikseli WMS Geoportalu
+WMS_CRS = "EPSG:2180"
+MAX_PX = 4096   # pixel limit
 
 _t_to_2180 = None
 
@@ -58,7 +42,7 @@ def _image_size(x_min, y_min, x_max, y_max, target_res: float):
     """Oblicza WIDTH/HEIGHT w px dla zadanej rozdzielczości, przycina do MAX_PX."""
     w_m = x_max - x_min
     h_m = y_max - y_min
-    width  = int(round(w_m / target_res))
+    width = int(round(w_m / target_res))
     height = int(round(h_m / target_res))
 
     if max(width, height) > MAX_PX:

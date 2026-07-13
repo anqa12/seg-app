@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX, NUM_CLASSES
 import cv2
+from PIL import Image
 
 
 # masks preparation
@@ -25,10 +26,8 @@ def class_percentages(mask: np.ndarray) -> dict:
 
 def load_mask_from_path(path: str) -> np.ndarray | None:
     """
-    Wczytuje maskę GT z pliku PNG (wartości pikseli = indeksy klas 0–4).
-    Obsługuje zarówno maski w skali szarości jak i RGB z CLASS_COLORS.
+    Loads GT mask from .png file (pixel values = indices of classes 0-4).
     """
-    from PIL import Image
     try:
         m = np.array(Image.open(path))
         if m.ndim == 3:
@@ -53,9 +52,8 @@ def render_legend():
                 unsafe_allow_html=True)
 
 
-# segmentation tiles
+# segmentation tiles - with % coverage
 def render_coverage_tiles(mask: np.ndarray):
-    """Kolorowe kafelki z % pokrycia — wyszarzone jeśli 0%."""
     pct = class_percentages(mask)
     cols = st.columns(NUM_CLASSES)
     for col, (cls, val) in zip(cols, pct.items()):
@@ -107,11 +105,11 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
                          mask_gt: np.ndarray, alpha: float,
                          label: str = ""):
     """
-    Pięć kolumn: oryginał / GT maska / GT nakładka / predykcja maska / predykcja nakładka
-    + dwie tabelki pokrycia (GT vs predykcja) obok siebie
-    + tabela metryk IoU/F1 per klasa jeśli GT dostępne.
+    Five columns: original / GT mask / GT overlay / pred mask / pred overlay
+    + two coverage tables (GT vs pred)
+    + metrics table (IoU/F1) per class, if GT available
     """
-    # Wyrównaj rozmiary — GT może mieć inny rozmiar niż predykcja
+
     h, w = mask_pred.shape
     if mask_gt.shape != mask_pred.shape:
         mask_gt = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
@@ -181,7 +179,7 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
 
 # results - without GT
 def render_result_block(img_input, mask, alpha, label: str = ""):
-    """Trzy kolumny: oryginał / maska / nakładka + legenda + kafelki pokrycia."""
+    """Three columns: original / mask / overlay + legend + coverage tiles."""
     h, w = mask.shape
     c1, c2, c3 = st.columns(3)
     c1.image(img_input[:h, :w], caption="Oryginał", width="stretch")
@@ -197,11 +195,14 @@ def render_result_block(img_input, mask, alpha, label: str = ""):
 def render_resolution_comparison(results: list[dict], alpha: float,
                                  mask_gt: np.ndarray | None = None):
     """
-    results: [{"label": str, "img": ndarray, "mask": ndarray, "metrics": dict|None}]
-    mask_gt: opcjonalna maska GT — jeśli podana, dodaje wiersz GT i metryki.
+    Renders one full block per resolution (input image / GT / prediction /
+    overlay side by side, plus land-cover coverage tiles), stacked vertically.
 
-    Układ pionowy: każda rozdzielczość to jeden pełny blok (obrazy + pokrycie
-    terenu), bloki ułożone jeden pod drugim.
+    results: [{"label": str, "img": ndarray, "mask": ndarray}]
+    mask_gt: optional ground-truth mask. If provided, each block also gets a
+        GT column, and a metrics table (mIoU/mF1) is computed at the end by
+        comparing every prediction against it. If NOT provided, no metrics
+        table is shown at all.
     """
     n = len(results)
     if n == 0:
@@ -254,29 +255,21 @@ def render_resolution_comparison(results: list[dict], alpha: float,
                     "mF1": round(float(m["f1"].mean()), 4),
                 })
             render_metrics_table(rows)
-    elif results[0].get("metrics"):
-        with st.expander("Metryki per rozdzielczość"):
-            rows = []
-            for r in results:
-                m = r["metrics"]
-                rows.append({
-                    "Rozdzielczość": r["label"],
-                    "mIoU": round(m["mIoU"], 4),
-                    "mF1": round(m["mF1"], 4),
-                    "Acc": round(m["pixel_accuracy"], 4),
-                })
-            render_metrics_table(rows)
 
 
 # different models comparison
 def render_model_comparison(img_input, model_results: dict, alpha: float,
                             mask_gt: np.ndarray | None = None):
     """
-    model_results: {"Nazwa modelu": mask_array, ...}
-    mask_gt: opcjonalna maska GT.
+    Renders one full block per model (input image / GT / prediction / overlay
+    side by side, plus land-cover coverage tiles), stacked vertically.
 
-    Układ pionowy: każdy model to jeden pełny blok (obrazy + pokrycie terenu),
-    bloki ułożone jeden pod drugim.
+    model_results: {"model name": mask_array, ...}
+    mask_gt: optional ground-truth mask. If provided, each block also gets a
+        GT column, and a metrics table (mIoU/mF1) is computed at the end by
+        comparing every model's prediction against it. If NOT provided, no
+        metrics table is shown at all — there is no fallback path here
+        (unlike render_resolution_comparison).
     """
     render_legend()
 

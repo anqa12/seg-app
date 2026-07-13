@@ -7,6 +7,8 @@ from utils.config import NUM_CLASSES
 import tempfile, os
 from PIL import Image
 import io
+import rasterio
+from rasterio.plot import reshape_as_image
 
 
 # gaussian blending
@@ -28,7 +30,8 @@ def _get_window(tile_size):
 
 
 def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
-    """Przeskalowuje obraz i przycina do wielokrotności 32 (wymagane przez UNet)."""
+    """Rescale the image to a multiple of 32 (Unet requirement)"""
+
     H, W = img.shape[:2]
     H_s = max(32, int(H * scale))
     W_s = max(32, int(W * scale))
@@ -49,13 +52,13 @@ def predict(
     progress_label: str = "",
 ) -> np.ndarray | None:
     """
-    Kafelkowa predykcja jednego modelu na pełnym obrazie.
+    Prediction on large image - partition into tiles
 
-    overlap:    0.0 = brak nakładania (ostre granice, szybciej)
-                0.5 = kafelki nakładają się w 50% (gładsze granice)
-    use_voting: True  = uśrednianie prawdopodobieństw z Gaussian window
-                        (zalecane przy overlap > 0)
-                False = ostatni kafelek nadpisuje (szybsze, overlap nic nie daje)
+    overlap:    0.0 = none (sharp edges, faster)
+                0.5 = 50% overlap (smoother edges)
+    use_voting: True  = average probabilities with Gaussian window
+                        (recommended when overlap > 0)
+                False = the last tile overwrite (faster, overlap not used)
     """
     if model is None:
         return None
@@ -77,7 +80,7 @@ def predict(
         return coords
 
     ys, xs = get_coords(H), get_coords(W)
-    total  = len(ys) * len(xs)
+    total = len(ys) * len(xs)
 
     if total == 0:
         st.warning(f"Zdjęcie ({W}×{H} px) za małe dla kafelka {tile_size}×{tile_size} px.")
@@ -88,18 +91,18 @@ def predict(
     if not use_voting:
         pred_full = np.zeros((H, W), dtype=np.uint8)
     else:
-        votes  = np.zeros((NUM_CLASSES, H, W), dtype=np.float32)
+        votes = np.zeros((NUM_CLASSES, H, W), dtype=np.float32)
         counts = np.zeros((H, W), dtype=np.float32)
         window = _get_window(tile_size)
 
-    bar  = st.progress(0, text=progress_label or "Segmentuję…")
+    bar = st.progress(0, text=progress_label or "Segmentuję…")
     done = 0
 
     for y in ys:
         for x in xs:
             y_end = min(y + tile_size, H)
             x_end = min(x + tile_size, W)
-            tile  = img_np[y:y_end, x:x_end]
+            tile = img_np[y:y_end, x:x_end]
 
             pad_h = tile_size - tile.shape[0]
             pad_w = tile_size - tile.shape[1]
@@ -120,8 +123,8 @@ def predict(
             else:
                 probs = scipy_softmax(logits, axis=0)
                 w_real_window = window[:h_real, :w_real]
-                votes[:,  y:y_end, x:x_end] += probs[:, :h_real, :w_real] * w_real_window[np.newaxis]
-                counts[      y:y_end, x:x_end] += w_real_window
+                votes[:, y:y_end, x:x_end] += probs[:, :h_real, :w_real] * w_real_window[np.newaxis]
+                counts[y:y_end, x:x_end] += w_real_window
 
             done += 1
             bar.progress(done / total, text=f"{progress_label} {done}/{total} kafelków…")
@@ -141,23 +144,23 @@ def predict_all_models(
     img_np: np.ndarray,
 ) -> dict[str, np.ndarray]:
     """
-    Uruchamia predykcję dla każdego modelu z listy models_cfg na tym samym obrazie.
+    Prediction for multiple models - same image
 
-    models_cfg: lista słowników z kluczami:
-        name       — nazwa modelu (do wyświetlenia)
-        model      — załadowany model PyTorch
-        tile_size  — rozmiar kafelka (domyślnie 512)
-        overlap    — nakładanie kafelków (domyślnie 0.5)
-        use_voting — czy uśredniać z Gaussian window (domyślnie True)
+    models_cfg: list of dicts:
+        name       — name of the model
+        model      — loaded model Pytorch
+        tile_size  —  size of tile (default 512)
+        overlap    — (default 0.5)
+        use_voting — if use Gaussian window (default True)
 
-    Zwraca: {nazwa_modelu: maska_np}
+    Returns: {model_name: mask_np}
     """
     all_preds = {}
     for cfg in models_cfg:
-        name       = cfg["name"]
-        model      = cfg["model"]
-        tile_size  = cfg.get("tile_size", 512)
-        overlap    = cfg.get("overlap", 0.5)
+        name = cfg["name"]
+        model = cfg["model"]
+        tile_size = cfg.get("tile_size", 512)
+        overlap = cfg.get("overlap", 0.5)
         use_voting = cfg.get("use_voting", True)
 
         if model is None:
@@ -177,15 +180,13 @@ def predict_all_models(
 
 # load image
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
-    """Wczytuje obraz z UploadedFile. Zwraca (img_rgb uint8, rozdzielczość_m lub None)."""
-    name  = uploaded_file.name.lower()
-    raw   = uploaded_file.read()
+    """Load img from UploadedFile. Returns (img_rgb uint8, resolution or None)"""
+    name = uploaded_file.name.lower()
+    raw = uploaded_file.read()
     res_m = None
 
     try:
         if name.endswith((".tif", ".tiff")):
-            import rasterio
-            from rasterio.plot import reshape_as_image
             tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
             tmp.write(raw)
             tmp.close()

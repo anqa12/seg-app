@@ -1,13 +1,10 @@
 import streamlit as st
-import numpy as np
-import cv2
-from PIL import Image
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import MODELS, RESOLUTIONS, CLASS_HEX, CLASSES, LANDCOVER_MODELS, BIGEARTHNET_MODELS
+from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS
 from utils.models import load_model
 from utils.inference import rescale, predict
 from utils.display import (render_result_block, render_resolution_comparison,
@@ -15,7 +12,6 @@ from utils.display import (render_result_block, render_resolution_comparison,
 from components.sample_tab import render_sample_tab
 from components.upload_tab import render_upload_tab
 from components.map_tab import render_map_tab
-from utils.session import set_native_resolution
 
 st.set_page_config(page_title="Segmentacja", page_icon="🔍", layout="wide")
 
@@ -47,8 +43,9 @@ def _default_models_for(dataset_type: str | None) -> list[str]:
         return [LANDCOVER_MODELS[0]]
     return [list(MODELS.keys())[0]]
 
+
 # session state
-if "source_res"  not in st.session_state: st.session_state["source_res"]  = 0.25
+if "source_res" not in st.session_state: st.session_state["source_res"] = 0.25
 if "img_np" not in st.session_state: st.session_state["img_np"] = None
 if "mask_gt" not in st.session_state: st.session_state["mask_gt"] = None
 if "resolutions" not in st.session_state: st.session_state["resolutions"] = dict(RESOLUTIONS)
@@ -263,7 +260,7 @@ with active_container:
             if mask is None:
                 continue
 
-            results.append({"label": res_label, "img": img_s, "mask": mask, "metrics": None})
+            results.append({"label": res_label, "img": img_s, "mask": mask})
 
         if not results:
             st.stop()

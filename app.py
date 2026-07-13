@@ -98,7 +98,7 @@ st.markdown("---")
 # classes
 st.markdown("**Klasy segmentacji**")
 CLASS_HEX = ["#000000", "#8B5A2B", "#228B22", "#4169E1", "#C0C0C0"]
-CLASSES   = ["Tło", "Zabudowa", "Lasy", "Woda", "Drogi"]
+CLASSES = ["Tło", "Zabudowa", "Lasy", "Woda", "Drogi"]
 
 dots = "".join(
     f'<span style="display:inline-flex;align-items:center;gap:5px;'

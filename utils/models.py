@@ -5,7 +5,7 @@ from utils.config import NUM_CLASSES, MODELS
 
 
 def _build_model(encoder_key: str):
-    """Buduje architekturę na podstawie klucza z config.MODELS."""
+    """Build architecture based on key from config.MODELS."""
     if encoder_key == "unet_resnet34":
         return smp.Unet(
             encoder_name="resnet34", encoder_weights=None,
@@ -28,8 +28,7 @@ def _build_model(encoder_key: str):
 @st.cache_resource(show_spinner=False)
 def load_model(model_name: str):
     """
-    Buduje i ładuje wagi modelu o podanej nazwie z config.MODELS.
-    Cachowane per sesja — każdy model ładuje się tylko raz.
+    Builds and loads models weights. Done with caching - each model load only once per session.
     """
     cfg = MODELS[model_name]
     model = _build_model(cfg["encoder"])
