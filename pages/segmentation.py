@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import MODELS, RESOLUTIONS, CLASS_HEX, CLASSES
+from utils.config import MODELS, RESOLUTIONS, CLASS_HEX, CLASSES, LANDCOVER_MODELS, BIGEARTHNET_MODELS
 from utils.models import load_model
 from utils.inference import rescale, predict
 from utils.display import (render_result_block, render_resolution_comparison,
@@ -15,6 +15,7 @@ from utils.display import (render_result_block, render_resolution_comparison,
 from components.sample_tab import render_sample_tab
 from components.upload_tab import render_upload_tab
 from components.map_tab import render_map_tab
+from utils.session import set_native_resolution
 
 st.set_page_config(page_title="Segmentacja", page_icon="🔍", layout="wide")
 
@@ -27,6 +28,24 @@ div[data-testid="stExpander"] { border: 1px solid rgba(128,128,128,0.2); border-
 
 st.title("Segmentacja semantyczna")
 st.markdown("---")
+
+# Domyślna rozdzielczość i model dopasowane automatycznie do datasetu
+# zdjęcia testowego (LandCover/BigEarthNet mają zupełnie inną skalę GSD,
+# więc "pierwszy z listy" jako domyślny nie ma sensu dla BigEarthNet).
+_DATASET_DEFAULT_RES = {
+    "LandCover":   "25 cm/px",
+    "BigEarthNet": "10 m/px",
+}
+
+
+def _default_models_for(dataset_type: str | None) -> list[str]:
+    """Domyślny model UNet dla danego datasetu (a dla mapy/uploadu — LandCover,
+    bo to generyczne ortofoto lotnicze, bliższe domenowo LandCover niż BigEarthNet)."""
+    if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
+        return [BIGEARTHNET_MODELS[0]]
+    if LANDCOVER_MODELS:
+        return [LANDCOVER_MODELS[0]]
+    return [list(MODELS.keys())[0]]
 
 # session state
 if "source_res"  not in st.session_state: st.session_state["source_res"]  = 0.25
@@ -72,8 +91,34 @@ with active_container:
 
     st.subheader("Wybierz ustawienia")
 
+    # Rozdzielczość źródłowa NIEZNANA (np. wgrany plik bez georeferencji —
+    # patrz utils/inference.py) — user musi ją podać TUTAJ, w panelu ustawień,
+    # zamiast dodatkowego osobnego przycisku/pola w zakładce wyboru zdjęcia.
+    # Zwykły selectbox od razu ma jakąś wartość (domyślną), więc nie trzeba
+    # żadnego dodatkowego potwierdzenia — wystarczy, że się pojawi.
+    manual_label = None
+    if source_res is None:
+        st.warning(
+            "⚠️ Nie wykryto rozdzielczości źródłowej tego zdjęcia — "
+            "wybierz ją poniżej, żeby móc uruchomić segmentację."
+        )
+        manual_label = st.selectbox(
+            "Rozdzielczość źródłowa tego zdjęcia:",
+            list(st.session_state["resolutions"].keys()),
+            key=f"manual_source_res_{st.session_state.get('selection_gen', 0)}",
+        )
+        source_res = st.session_state["resolutions"][manual_label]
+        st.session_state["source_res"] = source_res
+
     available_resolutions = list(st.session_state["resolutions"].keys())
     default_res = [available_resolutions[0]]
+
+    chosen_dataset_type = st.session_state.get("chosen_dataset_type")
+
+    if img_source == "sample" and chosen_dataset_type in _DATASET_DEFAULT_RES:
+        wanted = _DATASET_DEFAULT_RES[chosen_dataset_type]
+        if wanted in available_resolutions:
+            default_res = [wanted]
 
     if img_source in ("upload", "map"):
         # utils/session.py gwarantuje co najwyżej jeden wpis "Natywna (...)"
@@ -89,6 +134,13 @@ with active_container:
                 available_resolutions.insert(0, native_label)
             default_res = [native_label]
 
+    # Jeśli user właśnie ręcznie podał rozdzielczość źródłową powyżej, niech
+    # ta sama wartość będzie od razu domyślnie zaznaczona jako rozdzielczość
+    # docelowa — logicznie to ta sama liczba, więc nie ma sensu wymuszać
+    # dodatkowego, osobnego wyboru.
+    if manual_label:
+        default_res = [manual_label]
+
     col_m, col_r, col_v = st.columns([2, 2, 1])
 
     with col_m:
@@ -96,13 +148,12 @@ with active_container:
         st.caption("Wybierz jeden (porównanie rozdzielczości) lub wiele (porównanie modeli)")
         selected_models = st.multiselect(
             "Modele", list(MODELS.keys()),
-            default=[list(MODELS.keys())[0]],
+            default=_default_models_for(chosen_dataset_type),
             label_visibility="collapsed",
             key=f"selected_models_{st.session_state.get('selection_gen', 0)}"
         )
 
         # warning if model does not support current dataset
-        chosen_dataset_type = st.session_state.get("chosen_dataset_type")
         if chosen_dataset_type:
             mismatched = [
                 m for m in selected_models
@@ -158,7 +209,23 @@ with active_container:
 
     st.subheader("Wyniki segmentacji")
 
-    if not st.button("Uruchom segmentację", type="primary", width="stretch"):
+    # "Zatrzymaj" musi być wyrenderowany i klikalny ZANIM zacznie się ciężka
+    # pętla predykcji — Streamlit z automatu przerywa trwający przebieg
+    # skryptu, gdy user kliknie cokolwiek nowego, więc wystarczy, że przycisk
+    # jest już w DOM-ie (dlatego ustawiamy seg_running i sprawdzamy je od razu,
+    # a nie dopiero po zakończeniu obliczeń).
+    if st.button("Uruchom segmentację", type="primary", width="stretch"):
+        st.session_state["seg_running"] = True
+
+    running = st.session_state.get("seg_running", False)
+
+    if running:
+        if st.button("🛑 Zatrzymaj", width="stretch"):
+            st.session_state["seg_running"] = False
+            st.warning("Segmentacja została zatrzymana przez użytkownika.")
+            st.stop()
+
+    if not running:
         st.stop()
 
 
@@ -243,3 +310,6 @@ with active_container:
             first_ts = MODELS[selected_models[0]]["tile"]
             img_input = rescale(img_np, actual_scale, first_ts)
             render_model_comparison(img_input, model_results, alpha, mask_gt=mask_gt)
+
+    # obliczenia zakończone (nie przerwane) — wracamy do stanu początkowego
+    st.session_state["seg_running"] = False

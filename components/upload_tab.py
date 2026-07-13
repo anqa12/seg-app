@@ -63,6 +63,12 @@ def render_upload_tab():
                 if detected_res:
                     st.session_state["source_res"] = detected_res
                     set_native_resolution(detected_res)
+                else:
+                    # Jawnie NIEZNANA — inaczej reset_image_state() wyżej
+                    # zostawiłby tu domyślne 0.25, co byłoby dokładnie tym
+                    # samym "zgadywaniem", którego chcemy uniknąć. Docelową
+                    # wartość user poda w panelu ustawień w segmentation.py.
+                    st.session_state["source_res"] = None
 
     # ── Trwały podgląd wgranego zdjęcia ────────────────────────────────────
     # Renderowany zawsze, dopóki dane są w session_state — znika, gdy user
@@ -84,13 +90,10 @@ def render_upload_tab():
             if detected_res:
                 st.success(f"Wykryta rozdzielczość:\n**{detected_res:.4f} m/px**")
             else:
-                st.warning("Nie wykryto rozdzielczości z metadanych.")
-                res_label = st.selectbox(
-                    "Podaj rozdzielczość źródłową:",
-                    list(st.session_state["resolutions"].keys()),
-                    key="manual_res",
+                st.warning(
+                    "Nie wykryto rozdzielczości z metadanych — "
+                    "podaj ją w panelu **„Wybierz ustawienia”** poniżej."
                 )
-                st.session_state["source_res"] = st.session_state["resolutions"][res_label]
 
         if st.button("🗑️ Usuń wgrane zdjęcie", width="stretch"):
             _clear_upload()

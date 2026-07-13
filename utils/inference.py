@@ -191,10 +191,21 @@ def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | No
             tmp.close()
             with rasterio.open(tmp.name) as src:
                 img = reshape_as_image(src.read())
-                try:
-                    res_m = abs(src.transform[0])
-                except Exception:
-                    pass
+                # UWAGA: plik BEZ georeferencji (np. TIFF z WMS GetMap, który
+                # nie zapisuje ModelPixelScale/GeoKeyDirectory) nie daje w
+                # rasterio błędu ani None — GDAL podstawia domyślny "identity"
+                # transform (piksel = 1.0 jednostki mapy), co wygląda jak
+                # prawdziwa rozdzielczość "1 m/px", a nią nie jest. Dlatego
+                # ufamy transformowi TYLKO gdy plik ma faktyczny układ
+                # współrzędnych (CRS) I transform nie jest identity — inaczej
+                # zostawiamy res_m=None, żeby user sam podał rozdzielczość
+                # zamiast dostać zgadywankę.
+                has_real_georef = src.crs is not None and not src.transform.is_identity
+                if has_real_georef:
+                    try:
+                        res_m = abs(src.transform[0])
+                    except Exception:
+                        pass
             os.unlink(tmp.name)
         else:
             img = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))

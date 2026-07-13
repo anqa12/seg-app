@@ -33,6 +33,7 @@ _RESET_KEYS = [
     "_upload_img_np",
     "_upload_raw_name",
     "_upload_detected_res",
+    "seg_running",   # przerywa/kasuje stan "trwa segmentacja" przy zmianie zdjęcia
     # UWAGA: "_upload_processed_file_id" CELOWO nie jest tutaj — musi przetrwać
     # reset, inaczej ten sam plik nadal "przyklejony" do file_uploadera
     # zostałby przetworzony (i aktywowany) ponownie na następnym rerunie.
