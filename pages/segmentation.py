@@ -25,18 +25,15 @@ div[data-testid="stExpander"] { border: 1px solid rgba(128,128,128,0.2); border-
 st.title("Segmentacja semantyczna")
 st.markdown("---")
 
-# Domyślna rozdzielczość i model dopasowane automatycznie do datasetu
-# zdjęcia testowego (LandCover/BigEarthNet mają zupełnie inną skalę GSD,
-# więc "pierwszy z listy" jako domyślny nie ma sensu dla BigEarthNet).
+# default values for LC and BEN
 _DATASET_DEFAULT_RES = {
     "LandCover":   "25 cm/px",
     "BigEarthNet": "10 m/px",
 }
 
-
+# sets default values when using specific model
 def _default_models_for(dataset_type: str | None) -> list[str]:
-    """Domyślny model UNet dla danego datasetu (a dla mapy/uploadu — LandCover,
-    bo to generyczne ortofoto lotnicze, bliższe domenowo LandCover niż BigEarthNet)."""
+
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
     if LANDCOVER_MODELS:
@@ -71,11 +68,7 @@ mask_gt = st.session_state.get("mask_gt")
 source_res = st.session_state.get("source_res", 0.25)
 img_source = st.session_state.get("img_source")
 
-# Ustawienia i wyniki mają się pojawiać TYLKO w tej zakładce, z której
-# faktycznie pochodzi aktualnie wybrane zdjęcie — nie na całej stronie.
-# Obiekty zakładek zwrócone przez st.tabs() można ponownie użyć jako
-# kontener (`with tab_x:`) w dalszej części skryptu, więc renderujemy
-# resztę strony wewnątrz WŁAŚCIWEJ zakładki zamiast poniżej wszystkich.
+# render results
 _TAB_CONTAINERS = {"sample": tab_sample, "map": tab_map, "upload": tab_upload}
 active_container = _TAB_CONTAINERS.get(img_source)
 
@@ -88,19 +81,15 @@ with active_container:
 
     st.subheader("Wybierz ustawienia")
 
-    # Rozdzielczość źródłowa NIEZNANA (np. wgrany plik bez georeferencji —
-    # patrz utils/inference.py) — user musi ją podać TUTAJ, w panelu ustawień,
-    # zamiast dodatkowego osobnego przycisku/pola w zakładce wyboru zdjęcia.
-    # Zwykły selectbox od razu ma jakąś wartość (domyślną), więc nie trzeba
-    # żadnego dodatkowego potwierdzenia — wystarczy, że się pojawi.
+    # unknown resolution
     manual_label = None
     if source_res is None:
         st.warning(
-            "⚠️ Nie wykryto rozdzielczości źródłowej tego zdjęcia — "
+            "Nie wykryto rozdzielczości źródłowej zdjęcia — "
             "wybierz ją poniżej, żeby móc uruchomić segmentację."
         )
         manual_label = st.selectbox(
-            "Rozdzielczość źródłowa tego zdjęcia:",
+            "Rozdzielczość źródłowa zdjęcia:",
             list(st.session_state["resolutions"].keys()),
             key=f"manual_source_res_{st.session_state.get('selection_gen', 0)}",
         )
@@ -118,9 +107,7 @@ with active_container:
             default_res = [wanted]
 
     if img_source in ("upload", "map"):
-        # utils/session.py gwarantuje co najwyżej jeden wpis "Natywna (...)"
-        # w resolutions — ustawiony przez upload_tab.py (metadane) albo
-        # map_tab.py (rozdzielczość pobranego fragmentu ortofotomapy).
+
         native_label = next(
             (l for l in st.session_state["resolutions"] if l.startswith("Natywna (")),
             None,
@@ -131,10 +118,7 @@ with active_container:
                 available_resolutions.insert(0, native_label)
             default_res = [native_label]
 
-    # Jeśli user właśnie ręcznie podał rozdzielczość źródłową powyżej, niech
-    # ta sama wartość będzie od razu domyślnie zaznaczona jako rozdzielczość
-    # docelowa — logicznie to ta sama liczba, więc nie ma sensu wymuszać
-    # dodatkowego, osobnego wyboru.
+    # manual label == default resolution
     if manual_label:
         default_res = [manual_label]
 
@@ -206,11 +190,7 @@ with active_container:
 
     st.subheader("Wyniki segmentacji")
 
-    # "Zatrzymaj" musi być wyrenderowany i klikalny ZANIM zacznie się ciężka
-    # pętla predykcji — Streamlit z automatu przerywa trwający przebieg
-    # skryptu, gdy user kliknie cokolwiek nowego, więc wystarczy, że przycisk
-    # jest już w DOM-ie (dlatego ustawiamy seg_running i sprawdzamy je od razu,
-    # a nie dopiero po zakończeniu obliczeń).
+    # add stop button - available when seg_running == true
     if st.button("Uruchom segmentację", type="primary", width="stretch"):
         st.session_state["seg_running"] = True
 
@@ -308,5 +288,5 @@ with active_container:
             img_input = rescale(img_np, actual_scale, first_ts)
             render_model_comparison(img_input, model_results, alpha, mask_gt=mask_gt)
 
-    # obliczenia zakończone (nie przerwane) — wracamy do stanu początkowego
+    # go back to default state
     st.session_state["seg_running"] = False

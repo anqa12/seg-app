@@ -1,15 +1,3 @@
-"""
-upload_tab.py
--------------
-Fragment do wklejenia do segmentation.py jako zakładka wgrywania własnego zdjęcia.
-
-Użycie w segmentation.py:
-    from components.upload_tab import render_upload_tab
-
-    with tab_upload:
-        render_upload_tab()
-"""
-
 import streamlit as st
 
 from utils.inference import load_image_from_upload
@@ -17,11 +5,8 @@ from utils.session import reset_image_state, set_native_resolution
 
 
 def _clear_upload():
-    """
-    Usuwa wgrane zdjęcie: dane robocze + sam widget file_uploader.
-    Streamlit nie ma metody "clear" dla file_uploader — jedyny sposób to
-    podbicie klucza widgetu, żeby dostał świeżą, pustą instancję.
-    """
+
+    # clears previously added photo
     if st.session_state.get("img_source") == "upload":
         reset_image_state()
     st.session_state.pop("_upload_img_np", None)
@@ -36,6 +21,7 @@ def render_upload_tab():
     Renderuje zakładkę do wgrywania własnego zdjęcia (JPG/PNG/TIF) i wykrywania
     jego rozdzielczości źródłowej z metadanych (lub ręcznego jej podania).
     """
+    # uploads your own image + detects resolution from the metadata (if available)
     widget_key = f"upload_file_{st.session_state.get('_upload_widget_key', 0)}"
     uploaded = st.file_uploader(
         "Wgraj zdjęcie (JPG, PNG, TIF):",
@@ -46,10 +32,7 @@ def render_upload_tab():
     if uploaded is not None:
         file_id = getattr(uploaded, "file_id", None) or f"{uploaded.name}_{uploaded.size}"
 
-        # Przetwarzamy plik TYLKO gdy to naprawdę nowe wgranie — inaczej ten sam
-        # plik, który zostaje "przyklejony" do widgetu, wgrywałby się od nowa
-        # przy KAŻDYM rerunie strony (np. kliknięciu czegoś w innej zakładce)
-        # i przejmował aktywne zdjęcie z powrotem na siebie.
+        # processes the file iff new one was uploaded
         if st.session_state.get("_upload_processed_file_id") != file_id:
             img_np, detected_res = load_image_from_upload(uploaded)
             if img_np is not None:
@@ -64,18 +47,14 @@ def render_upload_tab():
                     st.session_state["source_res"] = detected_res
                     set_native_resolution(detected_res)
                 else:
-                    # Jawnie NIEZNANA — inaczej reset_image_state() wyżej
-                    # zostawiłby tu domyślne 0.25, co byłoby dokładnie tym
-                    # samym "zgadywaniem", którego chcemy uniknąć. Docelową
-                    # wartość user poda w panelu ustawień w segmentation.py.
+
+                    # if no metadata user needs to specify source_res
                     st.session_state["source_res"] = None
 
-    # ── Trwały podgląd wgranego zdjęcia ────────────────────────────────────
-    # Renderowany zawsze, dopóki dane są w session_state — znika, gdy user
-    # wybierze zdjęcie testowe / pobierze coś z mapy (reset_image_state()
-    # czyści "_upload_img_np"), albo kliknie "Usuń wgrane zdjęcie" poniżej.
+    # lookup
     if st.session_state.get("_upload_img_np") is not None:
         img_np = st.session_state["_upload_img_np"]
+        detected_res = st.session_state.get("_upload_detected_res")
 
         c_img, c_info = st.columns([3, 1])
         with c_img:
@@ -83,18 +62,41 @@ def render_upload_tab():
                 img_np,
                 caption=f"{st.session_state.get('_upload_raw_name', '')} — "
                         f"{img_np.shape[1]}×{img_np.shape[0]} px",
-                width="stretch",
+                use_container_width=True,
             )
         with c_info:
-            detected_res = st.session_state.get("_upload_detected_res")
             if detected_res:
-                st.success(f"Wykryta rozdzielczość:\n**{detected_res:.4f} m/px**")
+                st.success(f"Wykryta rozdzielczość:\n**{detected_res:.2f} m/px**")
             else:
-                st.warning(
-                    "Nie wykryto rozdzielczości z metadanych — "
-                    "podaj ją w panelu **„Wybierz ustawienia”** poniżej."
+                st.warning("Nie wykryto rozdzielczości z metadanych.")
+                st.markdown("**Podaj rozdzielczość źródłową (m/px):**")
+
+                # manual resolution
+                manual_str = st.text_input(
+                    "Rozdzielczość (m/px)",
+                    value=str(st.session_state.get("_upload_manual_res", "")),
+                    placeholder="np. 0.25",
+                    label_visibility="collapsed",
+                    key="upload_manual_res_input",
                 )
 
-        if st.button("🗑️ Usuń wgrane zdjęcie", width="stretch"):
+                if manual_str.strip():
+                    try:
+                        manual_res = float(manual_str.replace(",", "."))
+                        if manual_res <= 0:
+                            raise ValueError("Wartość musi być dodatnia")
+
+                        if st.session_state.get("_upload_manual_res") != manual_res:
+                            st.session_state["_upload_manual_res"] = manual_res
+                            st.session_state["source_res"] = manual_res
+                            set_native_resolution(manual_res)
+                            st.session_state["img_np"] = img_np
+                        st.success(f"Ustawiono: **{manual_res} m/px**")
+                    except ValueError:
+                        st.error("Podaj liczbę dodatnią, np. `0.25` lub `10`")
+                else:
+                    st.caption("Brak rozdzielczości — podaj wartość żeby móc uruchomić segmentację.")
+
+        if st.button("🗑️ Usuń wgrane zdjęcie", use_container_width=True):
             _clear_upload()
             st.rerun()

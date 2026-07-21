@@ -201,6 +201,7 @@ def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | No
                 # współrzędnych (CRS) I transform nie jest identity — inaczej
                 # zostawiamy res_m=None, żeby user sam podał rozdzielczość
                 # zamiast dostać zgadywankę.
+                # set resolution from metadata or set it manually
                 has_real_georef = src.crs is not None and not src.transform.is_identity
                 if has_real_georef:
                     try:

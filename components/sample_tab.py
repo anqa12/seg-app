@@ -1,15 +1,3 @@
-"""
-sample_tab.py
--------------
-Fragment do wklejenia do segmentation.py jako pierwsza zakładka.
-
-Użycie w segmentation.py:
-    from components.sample_tab import render_sample_tab
-
-    with tab_sample:
-        render_sample_tab()
-"""
-
 import os
 import numpy as np
 import streamlit as st
@@ -47,9 +35,8 @@ def render_sample_tab():
                     st.caption(info["desc"])
                     if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
                                  width="stretch"):
-                        # Najpierw pełny reset — usuwa stan po mapie/uploadzie
-                        # (podgląd, rozdzielczość "Natywna (...)", maskę GT itd.),
-                        # dopiero potem ustawiamy nowy wybór.
+
+                        # full reset of the img state, after setting new one
                         reset_image_state()
                         st.session_state["chosen"] = name
                         st.session_state["chosen_ds"] = dataset_name
@@ -78,7 +65,7 @@ def render_sample_tab():
             if st.session_state["mask_gt"] is not None:
                 st.success("Maska Ground Truth dostępna — wyniki będą zawierać metryki IoU/F1.")
             else:
-                st.info("Brak maski GT dla tego zdjęcia.")
+                st.info("Brak maski GT dla wybranego zdjęcia.")
 
             if st.button("🗑️ Usuń wybrane zdjęcie", key="remove_sample"):
                 reset_image_state()

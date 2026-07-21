@@ -44,7 +44,7 @@ def set_native_resolution(value: float) -> str:
     Used by upload_tab.py (resolution detected from metadata) and
     map_tab.py (resolution of the downloaded orthophoto fragment).
     """
-    label = f"Natywna ({value:.4f} m/px)"
+    label = f"Natywna ({value:.2f} m/px)"
     resolutions = st.session_state.setdefault("resolutions", {})
     for old in [l for l in resolutions if l.startswith("Natywna (")]:
         del resolutions[old]
