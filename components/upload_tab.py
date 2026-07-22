@@ -18,8 +18,7 @@ def _clear_upload():
 
 def render_upload_tab():
     """
-    Renderuje zakładkę do wgrywania własnego zdjęcia (JPG/PNG/TIF) i wykrywania
-    jego rozdzielczości źródłowej z metadanych (lub ręcznego jej podania).
+    Displays the tab for uploading your own photo (JPG/PNG/TIF) and detects resolution from metadata or asks for the data when there is none"
     """
     # uploads your own image + detects resolution from the metadata (if available)
     widget_key = f"upload_file_{st.session_state.get('_upload_widget_key', 0)}"

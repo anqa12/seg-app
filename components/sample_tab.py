@@ -10,7 +10,7 @@ from utils.session import reset_image_state
 
 def render_sample_tab():
     """
-    Renderuje zakładkę z gotowymi zdjęciami testowymi pogrupowanymi wg zbioru danych.
+    Renders tab with test images from LC and BEN uploaded before
     """
     dataset_names = list(SAMPLE_IMAGES.keys())
     inner_tabs = st.tabs([f"🗂 {ds}" for ds in dataset_names])
