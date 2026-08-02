@@ -220,7 +220,7 @@ def render_map_tab():
             )
 
         if st.button("⬇️ Pobierz ortofotomapę (.tiff)", type="primary",
-                     use_container_width=True, disabled=outside_poland):
+                     width='stretch', disabled=outside_poland):
             progress = st.progress(0, text="Łączenie z WMS Geoportalu…")
             progress.progress(15, text="Wysyłanie zapytania GetMap…")
             raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height)
@@ -307,9 +307,9 @@ def render_map_tab():
             data=st.session_state["_map_raw_bytes"],
             file_name=st.session_state["_map_filename"],
             mime="image/tiff",
-            use_container_width=True,
+            width='stretch',
         )
-        if st.button("🗑️ Usuń pobraną ortofotomapę", use_container_width=True):
+        if st.button("🗑️ Usuń pobraną ortofotomapę", width='stretch'):
             for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
                       "_map_caption", "_map_filename"):
                 st.session_state.pop(k, None)

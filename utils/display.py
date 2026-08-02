@@ -56,30 +56,56 @@ def render_legend():
 
 
 def render_coverage_tiles(mask: np.ndarray):
-    """Renders the segmentation coverage tiles on the screen with % scores."""
+    """
+    Renders segmentation coverage tiles with % scores.
+    Layout: 3 tiles in the first row, 2 tiles (centered) in the second row.
+    """
     pct = class_percentages(mask)
-    cols = st.columns(NUM_CLASSES)
-    for col, (cls, val) in zip(cols, pct.items()):
+    items = list(pct.items())
+
+    def _tile(col, cls, val):
         i = CLASSES.index(cls)
         hex_c = CLASS_HEX[i]
         active = val > 0.05
         opacity = "1" if active else "0.3"
+
+        # Tło (i==0) — czarny kolor niewidoczny na ciemnym tle,
+        # zastępujemy białą/szarą obwódką dla kropki i ramki karty
+        if i == 0:
+            dot_border = "border:1px solid rgba(255,255,255,.5)"
+            card_border = f"rgba(255,255,255,{'0.6' if active else '0.15'})"
+        else:
+            dot_border = "border:1px solid rgba(0,0,0,.15)"
+            card_border = f"{hex_c}{'bb' if active else '33'}"
+
         col.markdown(
             f"""<div style="
                 background:{hex_c}18;
-                border:2px solid {hex_c}{'bb' if active else '33'};
+                border:2px solid {card_border};
                 border-radius:10px;
-                padding:10px 6px 8px 6px;
+                padding:14px 6px 12px 6px;
                 text-align:center;
-                opacity:{opacity}">
+                opacity:{opacity};
+                margin:4px;">
               <div style="width:14px;height:14px;border-radius:4px;
-                   background:{hex_c};margin:0 auto 6px auto;
-                   border:1px solid rgba(0,0,0,.15)"></div>
-              <div style="font-size:10px;color:gray;margin-bottom:2px">{cls}</div>
+                   background:{hex_c};margin:0 auto 8px auto;
+                   {dot_border}"></div>
+              <div style="font-size:10px;color:gray;margin-bottom:4px">{cls}</div>
               <div style="font-size:20px;font-weight:700">{val:.1f}%</div>
             </div>""",
             unsafe_allow_html=True,
         )
+
+    # wiersz 1: pierwsze 3 klasy
+    for col, (cls, val) in zip(st.columns(3), items[:3]):
+        _tile(col, cls, val)
+
+    st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+
+    # wiersz 2: ostatnie 2 klasy wyśrodkowane pustymi kolumnami
+    _, c1, c2, _ = st.columns([0.5, 1, 1, 0.5])
+    for col, (cls, val) in zip([c1, c2], items[3:]):
+        _tile(col, cls, val)
 
 
 def render_metrics_table(metrics: dict):
@@ -93,13 +119,26 @@ def render_metrics_table(metrics: dict):
             elif v >= 0.4: return "color: #B8860B; font-weight:600"
             else: return "color: #C0392B"
         except Exception:
-            return ""
+            return "color: gray"  # NaN -> gray
 
-    numeric_cols = [c for c in df.columns if c != "Klasa" and c != "Rozdzielczość"
-                    and c != "Model"]
+    numeric_cols = [c for c in df.columns
+                    if c not in ("Klasa", "Rozdzielczość", "Model")]
+
+    # displays "-" instead of "None"
+    def _fmt(v):
+        if v is None:
+            return "—"
+        try:
+            if np.isnan(float(v)):
+                return "—"
+            return f"{float(v):.4f}"
+        except (TypeError, ValueError):
+            return "—"
+
     styled = (df.style
-                .map(color_val, subset=numeric_cols)
-                .format({c: "{:.4f}" for c in numeric_cols}))
+              .map(color_val, subset=numeric_cols)
+              .format({c: _fmt for c in numeric_cols}))
+
     st.dataframe(styled, width="stretch", hide_index=True)
 
 
@@ -129,13 +168,15 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
     render_legend()
 
     # Two segmentation tables (one for GT, one for pred)
-    col_gt, col_pred = st.columns(2)
+    st.markdown("<div style='margin-top:16px'></div>", unsafe_allow_html=True)
+    col_gt, col_pred = st.columns(2, gap="large")
     with col_gt:
         st.markdown("**Pokrycie terenu — Ground Truth**")
         render_coverage_tiles(mask_gt)
     with col_pred:
         st.markdown("**Pokrycie terenu — Predykcja**")
         render_coverage_tiles(mask_pred)
+    st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
     st.markdown("")
 
@@ -144,39 +185,52 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
         metrics = _compute_metrics(mask_pred, mask_gt)
         rows = []
         for i, cls in enumerate(CLASSES):
+            iou_val = metrics["iou"][i]
+            f1_val = metrics["f1"][i]
             rows.append({
                 "Klasa": cls,
-                "IoU": round(float(metrics["iou"][i]), 4),
-                "F1": round(float(metrics["f1"][i]), 4),
+                "IoU": round(float(iou_val), 4) if not np.isnan(iou_val) else None,
+                "F1": round(float(f1_val), 4) if not np.isnan(f1_val) else None,
             })
+
+        # mean calculated only with not NaN classes
+        mean_iou = float(np.nanmean(metrics["iou"]))
+        mean_f1 = float(np.nanmean(metrics["f1"]))
         rows.append({
             "Klasa": "— średnia —",
-            "IoU": round(float(metrics["iou"].mean()), 4),
-            "F1": round(float(metrics["f1"].mean()), 4),
+            "IoU": round(mean_iou, 4),
+            "F1": round(mean_f1, 4),
         })
-        rows = [
-            {"Klasa": r["Klasa"], "IoU": r["IoU"], "F1": r["F1"]}
-            for r in rows
-        ]
-
         render_metrics_table(rows)
 
 
 def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
-    """Compute metrics (IoU / F1)"""
+    """
+    Compute per-class IoU and F1.
+    Classes absent from both GT and prediction are marked as NaN
+    and excluded from the mean (macro average over present classes only).
+    """
+    iou = np.full(NUM_CLASSES, np.nan, dtype=np.float32)
+    f1 = np.full(NUM_CLASSES, np.nan, dtype=np.float32)
 
-    iou = np.zeros(NUM_CLASSES, dtype=np.float32)
-    f1 = np.zeros(NUM_CLASSES, dtype=np.float32)
     for c in range(NUM_CLASSES):
         p = (pred == c)
         g = (gt == c)
+
+        # class that does not exist neither in GT nor in pred
+        if not p.any() and not g.any():
+            continue
+
         tp = (p & g).sum()
         fp = (p & ~g).sum()
         fn = (~p & g).sum()
+
         denom_iou = tp + fp + fn
         denom_f1 = 2 * tp + fp + fn
+
         iou[c] = tp / denom_iou if denom_iou > 0 else 0.0
         f1[c] = 2 * tp / denom_f1 if denom_f1 > 0 else 0.0
+
     return {"iou": iou, "f1": f1}
 
 

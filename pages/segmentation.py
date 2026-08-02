@@ -163,15 +163,21 @@ with active_container:
 
     with col_v:
         st.markdown("**Nakładka**")
-        alpha = st.slider("Przezroczystość:", 0.0, 1.0, 0.45, 0.05,
-                          label_visibility="collapsed")
-        global_overlap = st.slider("Overlap kafelków:", 0.0, 0.5, 0.0, 0.1,
-                                   help="Używane jeśli model nie narzuca własnego overlapu w config.py")
-        # use overlap checkbox
-        use_voting = st.checkbox(
-            "Gaussian voting (gładsze granice)", value=(global_overlap > 0),
-            help="Włącz razem z overlap > 0, żeby faktycznie uśredniać nakładające się kafelki."
+        alpha = st.slider(
+            "Przezroczystość nakładki:", 0.0, 1.0, 0.45, 0.05,
+            label_visibility="collapsed",
         )
+
+        with st.expander("⚙️ Ustawienia zaawansowane"):
+            overlap = st.slider(
+                "Overlap kafelków:", 0.0, 0.5, 0.5, 0.1,
+                help="0 = szybciej (ostre granice)  |  0.5 = gładsze granice kafelków",
+            )
+            use_voting = st.checkbox(
+                "Gaussian voting",
+                value=True,
+                help="Uśredniaj nakładające się kafelki gaussowskim oknem.",
+            )
 
     n_m, n_r = len(selected_models), len(selected_res)
     if n_m == 0 or n_r == 0:
@@ -222,8 +228,8 @@ with active_container:
         with st.spinner(f"Ładowanie modelu {model_name}…"):
             model = load_model(model_name)
             tile_size = MODELS[model_name]["tile"]
-            overlap = MODELS[model_name].get("overlap", global_overlap)
-            voting = MODELS[model_name].get("use_voting", use_voting)
+            model_overlap = MODELS[model_name].get("overlap", overlap)
+            model_voting = MODELS[model_name].get("use_voting", use_voting)
 
         if model is None:
             st.stop()
@@ -240,8 +246,13 @@ with active_container:
                 )
 
             img_s = rescale(img_np, actual_scale, tile_size)
-            mask = predict(model, img_s, tile_size=tile_size, overlap=overlap,
-                           use_voting=voting, progress_label=f"[{res_label}]")
+            mask = predict(
+                model, img_s,
+                tile_size=tile_size,
+                overlap=model_overlap,
+                use_voting=model_voting,
+                progress_label=f"[{res_label}]",
+            )
             if mask is None:
                 continue
 
@@ -274,8 +285,8 @@ with active_container:
         model_results = {}
         for model_name in selected_models:
             ts = MODELS[model_name]["tile"]
-            overlap = MODELS[model_name].get("overlap", global_overlap)
-            voting = MODELS[model_name].get("use_voting", use_voting)
+            model_overlap = MODELS[model_name].get("overlap", overlap)
+            model_voting = MODELS[model_name].get("use_voting", use_voting)
 
             with st.spinner(f"Ładowanie {model_name}…"):
                 model = load_model(model_name)
@@ -284,7 +295,7 @@ with active_container:
 
             img_s = rescale(img_np, actual_scale, ts)
             mask = predict(model, img_s, tile_size=ts, overlap=overlap,
-                           use_voting=voting, progress_label=f"[{model_name}]")
+                           use_voting=model_voting, progress_label=f"[{model_name}]")
             if mask is not None:
                 model_results[model_name] = mask
 

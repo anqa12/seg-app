@@ -65,7 +65,7 @@ def render_upload_tab():
                 img_np,
                 caption=f"{st.session_state.get('_upload_raw_name', '')} — "
                         f"{img_np.shape[1]}×{img_np.shape[0]} px",
-                use_container_width=True,
+                width='stretch',
             )
         with c_info:
             if detected_res:
@@ -100,6 +100,6 @@ def render_upload_tab():
                 else:
                     st.caption("Brak rozdzielczości — podaj wartość żeby móc uruchomić segmentację.")
 
-        if st.button("🗑️ Usuń wgrane zdjęcie", use_container_width=True):
+        if st.button("🗑️ Usuń wgrane zdjęcie", width='stretch'):
             _clear_upload()
             st.rerun()
