@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import math
 import streamlit as st
 from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX, NUM_CLASSES
 import cv2
@@ -108,38 +109,43 @@ def render_coverage_tiles(mask: np.ndarray):
         _tile(col, cls, val)
 
 
-def render_metrics_table(metrics: dict):
-    """Renders the metrics table with color information about effectiveness."""
+def render_metrics_table(metrics: list[dict]):
     df = pd.DataFrame(metrics)
 
+    numeric_cols = [
+        c for c in df.columns
+        if c not in ("Klasa", "Rozdzielczość", "Model")
+    ]
+
     def color_val(val):
-        try:
-            v = float(val)
-            if v >= 0.7: return "color: #228B22; font-weight:600"
-            elif v >= 0.4: return "color: #B8860B; font-weight:600"
-            else: return "color: #C0392B"
-        except Exception:
-            return "color: gray"  # NaN -> gray
+        if val == "—":
+            return "color: white"
 
-    numeric_cols = [c for c in df.columns
-                    if c not in ("Klasa", "Rozdzielczość", "Model")]
+        v = float(val)
 
-    # displays "-" instead of "None"
-    def _fmt(v):
-        if v is None:
-            return "—"
-        try:
-            if np.isnan(float(v)):
-                return "—"
-            return f"{float(v):.4f}"
-        except (TypeError, ValueError):
-            return "—"
+        if v >= 0.7:
+            return "color: #228B22; font-weight:600"
+        elif v >= 0.4:
+            return "color: #B8860B; font-weight:600"
+        else:
+            return "color: #C0392B"
 
-    styled = (df.style
-              .map(color_val, subset=numeric_cols)
-              .format({c: _fmt for c in numeric_cols}))
+    # tutaj zamieniamy NaN na tekst
+    for c in numeric_cols:
+        df[c] = df[c].apply(
+            lambda x: "—" if pd.isna(x) else f"{float(x):.2f}"
+        )
 
-    st.dataframe(styled, width="stretch", hide_index=True)
+    styled = (
+        df.style
+        .map(color_val, subset=numeric_cols)
+    )
+
+    st.dataframe(
+        styled,
+        width="stretch",
+        hide_index=True
+    )
 
 
 def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
@@ -189,8 +195,8 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
             f1_val = metrics["f1"][i]
             rows.append({
                 "Klasa": cls,
-                "IoU": round(float(iou_val), 4) if not np.isnan(iou_val) else None,
-                "F1": round(float(f1_val), 4) if not np.isnan(f1_val) else None,
+                "IoU": iou_val,
+                "F1": f1_val,
             })
 
         # mean calculated only with not NaN classes
@@ -210,8 +216,8 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     Classes absent from both GT and prediction are marked as NaN
     and excluded from the mean (macro average over present classes only).
     """
-    iou = np.full(NUM_CLASSES, np.nan, dtype=np.float32)
-    f1 = np.full(NUM_CLASSES, np.nan, dtype=np.float32)
+    iou = np.full(NUM_CLASSES, np.nan, dtype=np.float64)
+    f1 = np.full(NUM_CLASSES, np.nan, dtype=np.float64)
 
     for c in range(NUM_CLASSES):
         p = (pred == c)
