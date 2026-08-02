@@ -13,7 +13,7 @@ from components.sample_tab import render_sample_tab
 from components.upload_tab import render_upload_tab
 from components.map_tab import render_map_tab
 
-st.set_page_config(page_title="Segmentacja", page_icon="🔍", layout="wide")
+st.set_page_config(page_title="Seg-app", page_icon="🛰", layout="wide")
 
 st.markdown("""
 <style>
@@ -22,7 +22,7 @@ div[data-testid="stExpander"] { border: 1px solid rgba(128,128,128,0.2); border-
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Segmentacja semantyczna")
+st.title("Segmentacja semantyczna obrazów teledetekcyjnych")
 st.markdown("---")
 
 # default values for LC and BEN
@@ -35,8 +35,6 @@ _DATASET_DEFAULT_RES = {
 def _default_models_for(dataset_type):
     """
     sets default values when using specific model
-    :param dataset_type:
-    :return:
     """
 
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
