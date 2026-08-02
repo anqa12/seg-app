@@ -36,14 +36,14 @@ RESOLUTIONS = {
 }
 
 
-def _load_samples(dataset: str, source_res: float = 0.25) -> dict:
+def _load_samples(dataset: str, source_res: float = 0.25) -> dict[str, dict[str, str | float]]:
     """
     Automatically loads samples from assets/samples/<dataset>/images/ and adjust masks
     from assets/samples/<dataset>/masks/ by filename
     """
     img_dir = f"assets/samples/{dataset}/images"
     mask_dir = f"assets/samples/{dataset}/masks"
-    samples = {}
+    samples: dict[str, dict[str, str | float]] = {}
 
     if not os.path.exists(img_dir):
         return samples

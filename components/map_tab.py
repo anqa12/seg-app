@@ -4,14 +4,13 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
-try:
-    import folium
-    from streamlit_folium import st_folium
-    from folium.plugins import Draw
-    from pyproj import Transformer
-    FOLIUM_OK = True
-except ImportError:
-    FOLIUM_OK = False
+import folium
+from streamlit_folium import st_folium
+from folium.plugins import Draw
+from pyproj import Transformer
+
+import rasterio
+from rasterio.transform import from_origin
 
 from utils.session import reset_image_state, set_native_resolution
 
@@ -25,7 +24,12 @@ POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 2
 
 _t_to_2180 = None
 
+
 def _transformer():
+    """
+    Initialize and return a cached pyproj Transformer from geographic coordinates
+    (EPSG:4326) to Polish national grid system (EPSG:2180).
+    """
     global _t_to_2180
     if _t_to_2180 is None:
         _t_to_2180 = Transformer.from_crs("EPSG:4326", "EPSG:2180", always_xy=True)
@@ -33,6 +37,10 @@ def _transformer():
 
 
 def _bbox_to_2180(lon_min, lat_min, lon_max, lat_max):
+    """
+    Transform a bounding box from geographic coordinates (EPSG:4326)
+    into Projected Coordinate System EPSG:2180 coordinates.
+    """
     t = _transformer()
     x_min, y_min = t.transform(lon_min, lat_min)
     x_max, y_max = t.transform(lon_max, lat_max)
@@ -40,6 +48,10 @@ def _bbox_to_2180(lon_min, lat_min, lon_max, lat_max):
 
 
 def _image_size(x_min, y_min, x_max, y_max, target_res: float):
+    """
+    Compute output pixel dimensions (width, height) and actual spatial resolution
+    based on metric dimensions and user constraints, enforcing safety limits (MAX_PX).
+    """
     w_m = x_max - x_min
     h_m = y_max - y_min
     width = int(round(w_m / target_res))
@@ -53,9 +65,11 @@ def _image_size(x_min, y_min, x_max, y_max, target_res: float):
 
 
 def _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h):
+    """
+    Encode a NumPy image matrix into a GeoTIFF byte array in memory using rasterio,
+    injecting correct geospatial bounds and CRS headers.
+    """
     try:
-        import rasterio
-        from rasterio.transform import from_origin
         transform = from_origin(x_min, y_max, pixel_w, pixel_h)
         h, w = img_np.shape[:2]
         with rasterio.io.MemoryFile() as memfile:
@@ -71,6 +85,10 @@ def _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h):
 
 
 def _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height):
+    """
+    Perform an HTTP GET request to the Geoportal WMS endpoint using standard parameters
+    to pull down map tile data as raw TIFF bytes.
+    """
     bbox_str = f"{y_min},{x_min},{y_max},{x_max}"
     params = {
         "SERVICE": "WMS", "VERSION": WMS_VERSION, "REQUEST": "GetMap",
@@ -83,18 +101,20 @@ def _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height):
         resp.raise_for_status()
         return resp.content
     except requests.exceptions.Timeout:
-        st.error("⏱️ Przekroczono czas oczekiwania (60s). Spróbuj mniejszy obszar lub niższą rozdzielczość.")
+        st.error("Przekroczono czas oczekiwania (60s). Spróbuj mniejszy obszar lub niższą rozdzielczość.")
         return None
     except Exception as e:
-        st.error(f"❌ Błąd pobierania WMS: {e}")
+        st.error(f"Błąd pobierania WMS: {e}")
         return None
 
 
-def _is_blank_image(img_np: np.ndarray, threshold: float = 0.98) -> bool:
+# checks if the image is black/white - meaning not available
+def _is_blank_image(img_np, threshold=0.98):
     """
-    Sprawdza czy obraz jest praktycznie jednokolorowy (biały/czarny/pusty).
-    Zwraca True jeśli ponad `threshold` pikseli ma tę samą wartość na każdym kanale.
+    Inspect pixel color distributions across channels to detect uniform placeholder
+    or blank tiles returned when data is missing outside coverage boundaries.
     """
+
     if img_np is None:
         return True
     for channel in range(img_np.shape[2]):
@@ -106,24 +126,25 @@ def _is_blank_image(img_np: np.ndarray, threshold: float = 0.98) -> bool:
 
 
 def render_map_tab():
-    if not FOLIUM_OK:
-        st.error("Brakuje pakietów: `pip install streamlit-folium folium pyproj`")
-        return
+    """
+    Main Streamlit UI controller rendering the interactive Folium selector map,
+    bounding box extraction pipeline, WMS downloader logic, and preview/export tools.
+    """
 
     st.caption(
-        "Narysuj prostokąt na mapie narzędziem ▭ (lewy górny róg mapy), "
+        "Narysuj prostokąt na mapie narzędziem (lewy górny róg mapy), "
         "wybierz rozdzielczość i kliknij **Pobierz**. "
         "Ortofotomapa dostępna tylko dla Polski."
     )
 
     # resolution
     res_options = {
-        "10 cm/px  (bardzo duże pliki, wolno)": 0.10,
-        "25 cm/px  (zalecane — jak LandCover)": 0.25,
-        "50 cm/px":                              0.50,
-        "1 m/px    (szybko, mały plik)":         1.00,
+        "10 cm/px  (duże pliki - wolniej)": 0.10,
+        "25 cm/px  (zalecane — dla Landcover)": 0.25,
+        "50 cm/px": 0.50,
+        "1 m/px    (małe pliki - szybciej)": 1.00,
     }
-    res_label  = st.radio(
+    res_label = st.radio(
         "Rozdzielczość pobierania", list(res_options.keys()),
         index=1, horizontal=True,
     )
@@ -183,10 +204,10 @@ def render_map_tab():
             )
         with col_warn:
             if capped:
-                st.warning(f"⚠️ Obszar zbyt duży — przycięty do {MAX_PX} px. "
+                st.warning(f"Obszar zbyt duży — przycięty do {MAX_PX} px. "
                            f"Faktyczna rozdzielczość: {actual_res:.2f} m/px.")
             elif w_m > 10_000 or h_m > 10_000:
-                st.info("Duży obszar — pobieranie może chwilę potrwać.")
+                st.info("Pobieranie w toku...")
 
         outside_poland = (
             lon_max < POLAND_BOUNDS["min_lon"] or lon_min > POLAND_BOUNDS["max_lon"] or
@@ -194,7 +215,7 @@ def render_map_tab():
         )
         if outside_poland:
             st.error(
-                "❌ Zaznaczony obszar leży poza Polską — ortofotomapa Geoportalu "
+                "Zaznaczony obszar leży poza Polską — ortofotomapa Geoportalu "
                 "dostępna wyłącznie dla terytorium Polski."
             )
 
@@ -211,17 +232,17 @@ def render_map_tab():
                 img_np = None
                 try:
                     img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-                    img_np  = np.array(img_pil)
+                    img_np = np.array(img_pil)
                 except Exception as e:
                     progress.empty()
-                    st.error(f"❌ Nie udało się wczytać pobranego pliku: {e}")
+                    st.error(f"Nie udało się wczytać pobranego pliku: {e}")
 
                 if img_np is not None:
                     # validation - downloaded img
                     if _is_blank_image(img_np):
                         progress.empty()
                         st.error(
-                            "❌ Pobrany obraz jest pusty (biały/czarny). "
+                            "Pobrany obraz jest pusty."
                             "Geoportal nie ma ortofotomapy dla tego obszaru lub "
                             "żądany fragment leży poza zasięgiem usługi. "
                             "Spróbuj inny obszar, przesuń prostokąt lub zmniejsz go."
@@ -238,7 +259,7 @@ def render_map_tab():
                         if (real_w, real_h) != (width, height):
                             actual_res = ((w_m / real_w) + (h_m / real_h)) / 2.0
                             st.warning(
-                                f"⚠️ Serwer zwrócił {real_w}×{real_h} px zamiast "
+                                f"Serwer zwrócił {real_w}×{real_h} px zamiast "
                                 f"{width}×{height} px — przeliczam rozdzielczość z "
                                 f"faktycznego rozmiaru: **{actual_res:.2f} m/px**."
                             )
@@ -254,7 +275,6 @@ def render_map_tab():
                         st.session_state["source_res"] = round(actual_res, 4)
                         set_native_resolution(actual_res)
 
-                        # Trwały podgląd
                         st.session_state["_map_img_np"] = img_np
                         st.session_state["_map_raw_bytes"] = save_bytes
                         st.session_state["_map_actual_res"] = actual_res
@@ -272,7 +292,7 @@ def render_map_tab():
     # ortophotomap preview
     if st.session_state.get("_map_img_np") is not None:
         st.success(
-            f"✅ Pobrano ortofotomapę — "
+            f"Pobrano ortofotomapę — "
             f"{st.session_state['_map_img_np'].shape[1]} × "
             f"{st.session_state['_map_img_np'].shape[0]} px, "
             f"rozdzielczość: **{st.session_state['_map_actual_res']:.2f} m/px**"

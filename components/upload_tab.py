@@ -5,8 +5,10 @@ from utils.session import reset_image_state, set_native_resolution
 
 
 def _clear_upload():
+    """
+    Clears previously uploaded file and resets the state
+    """
 
-    # clears previously added photo
     if st.session_state.get("img_source") == "upload":
         reset_image_state()
     st.session_state.pop("_upload_img_np", None)
@@ -18,9 +20,11 @@ def _clear_upload():
 
 def render_upload_tab():
     """
-    Displays the tab for uploading your own photo (JPG/PNG/TIF) and detects resolution from metadata or asks for the data when there is none"
+    Streamlit UI component for uploading your own images (JPG/PNG/TIFF)
+    detects resolution from metadata or asks the user when it is missing
     """
-    # uploads your own image + detects resolution from the metadata (if available)
+
+    # upload your own image + detect resolution from the metadata (if available)
     widget_key = f"upload_file_{st.session_state.get('_upload_widget_key', 0)}"
     uploaded = st.file_uploader(
         "Wgraj zdjęcie (JPG, PNG, TIF):",
@@ -31,7 +35,7 @@ def render_upload_tab():
     if uploaded is not None:
         file_id = getattr(uploaded, "file_id", None) or f"{uploaded.name}_{uploaded.size}"
 
-        # processes the file iff new one was uploaded
+        # process the file iff new one was uploaded
         if st.session_state.get("_upload_processed_file_id") != file_id:
             img_np, detected_res = load_image_from_upload(uploaded)
             if img_np is not None:
@@ -47,7 +51,7 @@ def render_upload_tab():
                     set_native_resolution(detected_res)
                 else:
 
-                    # if no metadata user needs to specify source_res
+                    # if no metadata, specify source_res
                     st.session_state["source_res"] = None
 
     # lookup

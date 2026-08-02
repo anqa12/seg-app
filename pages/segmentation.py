@@ -31,8 +31,13 @@ _DATASET_DEFAULT_RES = {
     "BigEarthNet": "10 m/px",
 }
 
-# sets default values when using specific model
-def _default_models_for(dataset_type: str | None) -> list[str]:
+
+def _default_models_for(dataset_type):
+    """
+    sets default values when using specific model
+    :param dataset_type:
+    :return:
+    """
 
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
@@ -197,7 +202,7 @@ with active_container:
     running = st.session_state.get("seg_running", False)
 
     if running:
-        if st.button("🛑 Zatrzymaj", width="stretch"):
+        if st.button("Zatrzymaj", width="stretch"):
             st.session_state["seg_running"] = False
             st.warning("Segmentacja została zatrzymana przez użytkownika.")
             st.stop()
@@ -206,7 +211,7 @@ with active_container:
         st.stop()
 
 
-    def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
+    def calculate_actual_scale(res_label, source_resolution_m):
         target_res_m = st.session_state["resolutions"][res_label]
         return source_resolution_m / target_res_m
 

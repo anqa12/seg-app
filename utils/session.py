@@ -17,7 +17,7 @@ _RESET_KEYS = [
     "_upload_img_np",
     "_upload_raw_name",
     "_upload_detected_res",
-    "seg_running",   # interrupts/clears the "segmentation running" state on image change
+    "seg_running",   # clears the "segmentation running" state on image change
 ]
 
 
@@ -39,14 +39,13 @@ def reset_image_state():
 
 def set_native_resolution(value: float) -> str:
     """
-    Stores `value` as the ONLY "Native (...)" label in the resolutions dict
-    (removing the previous one, if any) and returns its name.
+    Sets the native resolution of the session state.
     Used by upload_tab.py (resolution detected from metadata) and
     map_tab.py (resolution of the downloaded orthophoto fragment).
     """
-    label = f"Natywna ({value:.2f} m/px)"
+    label = f"wykryta: {value:.2f} m/px"
     resolutions = st.session_state.setdefault("resolutions", {})
-    for old in [l for l in resolutions if l.startswith("Natywna (")]:
+    for old in [l for l in resolutions if l.startswith("wykryta:")]:
         del resolutions[old]
     resolutions[label] = round(value, 4)
     return label

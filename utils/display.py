@@ -6,12 +6,14 @@ import cv2
 from PIL import Image
 
 
-# masks preparation
 def mask_to_rgb(mask: np.ndarray) -> np.ndarray:
+    """Converts the mask into 5-color RGB image."""
     return CLASS_COLORS[mask]
 
 
 def overlay(img: np.ndarray, mask: np.ndarray, alpha: float = 0.45) -> np.ndarray:
+    """Overlays the mask on the image for visualization.
+    You can manually arrange alpha value to manipulate the visibility of the mask on the image."""
     h, w = mask.shape
     img_c = img[:h, :w].astype(np.float32)
     mask_c = CLASS_COLORS[mask].astype(np.float32)
@@ -19,6 +21,7 @@ def overlay(img: np.ndarray, mask: np.ndarray, alpha: float = 0.45) -> np.ndarra
 
 
 def class_percentages(mask: np.ndarray) -> dict:
+    """Calculates the percentage of each class in the mask."""
     total = mask.size
     return {cls: round((mask == i).sum() / total * 100, 1)
             for i, cls in enumerate(CLASSES)}
@@ -38,8 +41,8 @@ def load_mask_from_path(path: str) -> np.ndarray | None:
         return None
 
 
-# legend
 def render_legend():
+    """Renders the legend on the screen."""
     items = "".join(
         f'<span style="display:inline-flex;align-items:center;'
         f'gap:5px;margin-right:14px;font-size:13px">'
@@ -52,8 +55,8 @@ def render_legend():
                 unsafe_allow_html=True)
 
 
-# segmentation tiles - with % coverage
 def render_coverage_tiles(mask: np.ndarray):
+    """Renders the segmentation coverage tiles on the screen with % scores."""
     pct = class_percentages(mask)
     cols = st.columns(NUM_CLASSES)
     for col, (cls, val) in zip(cols, pct.items()):
@@ -79,8 +82,8 @@ def render_coverage_tiles(mask: np.ndarray):
         )
 
 
-# metrics table
 def render_metrics_table(metrics: dict):
+    """Renders the metrics table with color information about effectiveness."""
     df = pd.DataFrame(metrics)
 
     def color_val(val):
@@ -100,7 +103,6 @@ def render_metrics_table(metrics: dict):
     st.dataframe(styled, width="stretch", hide_index=True)
 
 
-# GT comparison
 def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
                          mask_gt: np.ndarray, alpha: float,
                          label: str = ""):
@@ -161,6 +163,7 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray,
 
 
 def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
+    """Compute metrics (IoU / F1)"""
 
     iou = np.zeros(NUM_CLASSES, dtype=np.float32)
     f1 = np.zeros(NUM_CLASSES, dtype=np.float32)
@@ -177,9 +180,9 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     return {"iou": iou, "f1": f1}
 
 
-# results - without GT
 def render_result_block(img_input, mask, alpha, label: str = ""):
-    """Three columns: original / mask / overlay + legend + coverage tiles."""
+    """Renders results without GT mask.
+    Three columns: original / mask / overlay + legend + coverage tiles."""
     h, w = mask.shape
     c1, c2, c3 = st.columns(3)
     c1.image(img_input[:h, :w], caption="Oryginał", width="stretch")

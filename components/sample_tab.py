@@ -10,7 +10,8 @@ from utils.session import reset_image_state
 
 def render_sample_tab():
     """
-    Renders tab with test images from LC and BEN uploaded before
+    Streamlit UI controller rendering the tab with samples from BEN and LC datasets
+    for the user to be able to test models
     """
     dataset_names = list(SAMPLE_IMAGES.keys())
     inner_tabs = st.tabs([f"🗂 {ds}" for ds in dataset_names])
@@ -36,7 +37,7 @@ def render_sample_tab():
                     if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
                                  width="stretch"):
 
-                        # full reset of the img state, after setting new one
+                        # full reset of the img state, after choosing new img
                         reset_image_state()
                         st.session_state["chosen"] = name
                         st.session_state["chosen_ds"] = dataset_name
@@ -62,10 +63,6 @@ def render_sample_tab():
                              f"{st.session_state['img_np'].shape[0]} px "
                              f"({st.session_state['source_res']} m/px)",
                      width=400)
-            if st.session_state["mask_gt"] is not None:
-                st.success("Maska Ground Truth dostępna — wyniki będą zawierać metryki IoU/F1.")
-            else:
-                st.info("Brak maski GT dla wybranego zdjęcia.")
 
             if st.button("🗑️ Usuń wybrane zdjęcie", key="remove_sample"):
                 reset_image_state()

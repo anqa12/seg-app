@@ -12,7 +12,12 @@ from rasterio.plot import reshape_as_image
 
 
 # gaussian blending
-def _gaussian_window(size, sigma_ratio=0.25):
+def _gaussian_window(size: int, sigma_ratio: float = 0.25) -> np.ndarray:
+    """
+    Generate a 2D Gaussian window to blend overlapping tile predictions
+    and prevent sharp edges at tile boundaries. (Higher probability in the middle,
+    less probability on the edges)
+    """
     sigma = size * sigma_ratio
     y, x = np.mgrid[0:size, 0:size]
     cy, cx = size / 2.0, size / 2.0
@@ -23,7 +28,8 @@ def _gaussian_window(size, sigma_ratio=0.25):
 _GAUSS_CACHE = {}
 
 
-def _get_window(tile_size):
+def _get_window(tile_size: int) -> np.ndarray:
+    """Retrieve or compute a cached Gaussian window for a given tile size."""
     if tile_size not in _GAUSS_CACHE:
         _GAUSS_CACHE[tile_size] = _gaussian_window(tile_size)
     return _GAUSS_CACHE[tile_size]
@@ -44,7 +50,7 @@ def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
 
 # predic one model
 def predict(
-    model,
+    model: torch.nn.Module | None,
     img_np: np.ndarray,
     tile_size: int,
     overlap: float = 0.5,
@@ -52,7 +58,8 @@ def predict(
     progress_label: str = "",
 ) -> np.ndarray | None:
     """
-    Prediction on large image - partition into tiles
+    Perform semantic segmentation prediction on a large image by splitting it
+    into smaller overlapping tiles and stitching the outputs back together.
 
     overlap:    0.0 = none (sharp edges, faster)
                 0.5 = 50% overlap (smoother edges)
@@ -107,7 +114,7 @@ def predict(
             pad_h = tile_size - tile.shape[0]
             pad_w = tile_size - tile.shape[1]
             if pad_h > 0 or pad_w > 0:
-                tile = np.pad(tile, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant")
+                tile = np.pad(tile, ((0, pad_h), (0, pad_w), (0, 0)), mode="reflect")
 
             tensor = torch.from_numpy(tile).permute(2, 0, 1).float() / 255.0
             tensor = tensor.unsqueeze(0).to(device)
@@ -144,7 +151,8 @@ def predict_all_models(
     img_np: np.ndarray,
 ) -> dict[str, np.ndarray]:
     """
-    Prediction for multiple models - same image
+    Run segmentation prediction across multiple models on the same input image
+    and return a dictionary mapping model names to their resulting prediction masks.
 
     models_cfg: list of dicts:
         name       — name of the model
@@ -178,9 +186,9 @@ def predict_all_models(
     return all_preds
 
 
-# load image
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
-    """Load img from UploadedFile. Returns (img_rgb uint8, resolution or None)"""
+    """Load an image from an uploaded Streamlit file object (supports standard image formats
+    and geospatial TIFF files). Returns a tuple of (RGB image array as uint8, ground resolution or None)."""
     name = uploaded_file.name.lower()
     raw = uploaded_file.read()
     res_m = None
@@ -192,15 +200,6 @@ def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | No
             tmp.close()
             with rasterio.open(tmp.name) as src:
                 img = reshape_as_image(src.read())
-                # UWAGA: plik BEZ georeferencji (np. TIFF z WMS GetMap, który
-                # nie zapisuje ModelPixelScale/GeoKeyDirectory) nie daje w
-                # rasterio błędu ani None — GDAL podstawia domyślny "identity"
-                # transform (piksel = 1.0 jednostki mapy), co wygląda jak
-                # prawdziwa rozdzielczość "1 m/px", a nią nie jest. Dlatego
-                # ufamy transformowi TYLKO gdy plik ma faktyczny układ
-                # współrzędnych (CRS) I transform nie jest identity — inaczej
-                # zostawiamy res_m=None, żeby user sam podał rozdzielczość
-                # zamiast dostać zgadywankę.
                 # set resolution from metadata or set it manually
                 has_real_georef = src.crs is not None and not src.transform.is_identity
                 if has_real_georef:
