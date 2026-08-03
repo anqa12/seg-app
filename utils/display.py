@@ -314,8 +314,8 @@ def render_resolution_comparison(results: list[dict], alpha: float,
                 m = _compute_metrics(r["mask"], gt_r)
                 rows.append({
                     "Rozdzielczość": r["label"],
-                    "mIoU": round(float(m["iou"].mean()), 4),
-                    "mF1": round(float(m["f1"].mean()), 4),
+                    "mIoU": round(float(np.nanmean(m["iou"])), 4),
+                    "mF1": round(float(np.nanmean(m["f1"])), 4),
                 })
             render_metrics_table(rows)
 
@@ -376,7 +376,7 @@ def render_model_comparison(img_input, model_results: dict, alpha: float,
                 m = _compute_metrics(mask, gt_r)
                 rows.append({
                     "Model": name,
-                    "mIoU": round(float(m["iou"].mean()), 4),
-                    "mF1": round(float(m["f1"].mean()), 4),
+                    "mIoU": round(float(np.nanmean(m["iou"])), 4),
+                    "mF1": round(float(np.nanmean(m["f1"])), 4),
                 })
             render_metrics_table(rows)

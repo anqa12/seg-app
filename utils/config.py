@@ -48,13 +48,17 @@ def _load_samples(dataset: str, source_res: float = 0.25) -> dict[str, dict[str,
     if not os.path.exists(img_dir):
         return samples
 
-    for fname in sorted(os.listdir(img_dir)):
-        if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".tif")):
-            continue
-        stem = os.path.splitext(fname)[0]  # only filename
+    suffix = "LC" if "landcover" in dataset.lower() else "BEN"
+
+    for i, fname in enumerate(
+            sorted(f for f in os.listdir(img_dir)
+                   if not f.startswith(".")
+                      and f.lower().endswith((".jpg", ".jpeg", ".png", ".tif"))),
+            start=1
+    ):
+        stem = os.path.splitext(fname)[0]
         img_path = os.path.join(img_dir, fname)
 
-        # mask with the same filename
         mask_path = None
         for ext in (".png", ".tif", ".jpg"):
             candidate = os.path.join(mask_dir, stem + ext)
@@ -62,10 +66,13 @@ def _load_samples(dataset: str, source_res: float = 0.25) -> dict[str, dict[str,
                 mask_path = candidate
                 break
 
-        samples[stem] = {
+        # displayed name
+        label = f"test{i}_{suffix}"
+
+        samples[label] = {
             "img": img_path,
             "mask": mask_path,
-            "desc": f"{stem} — {dataset}",
+            "desc": label,
             "source_res": source_res,
         }
 
