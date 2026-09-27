@@ -1,23 +1,20 @@
+import os
+import io
+import tempfile
 import torch
 import numpy as np
 import cv2
 import streamlit as st
 from scipy.special import softmax as scipy_softmax
-from utils.config import NUM_CLASSES
-import tempfile, os
 from PIL import Image
-import io
 import rasterio
 from rasterio.plot import reshape_as_image
+from utils.config import NUM_CLASSES
 
 
-# gaussian blending
+# --- GAUSSIAN BLENDING ---
 def _gaussian_window(size: int, sigma_ratio: float = 0.25) -> np.ndarray:
-    """
-    Generate a 2D Gaussian window to blend overlapping tile predictions
-    and prevent sharp edges at tile boundaries. (Higher probability in the middle,
-    less probability on the edges)
-    """
+    """Generate a 2D Gaussian window to blend overlapping tile predictions."""
     sigma = size * sigma_ratio
     y, x = np.mgrid[0:size, 0:size]
     cy, cx = size / 2.0, size / 2.0
@@ -35,9 +32,8 @@ def _get_window(tile_size: int) -> np.ndarray:
     return _GAUSS_CACHE[tile_size]
 
 
-def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
-    """Rescale the image to a multiple of 32 (Unet requirement)"""
-
+def rescale(img: np.ndarray, scale: float) -> np.ndarray:
+    """Rescale the image to a multiple of 32 (UNet requirement)."""
     H, W = img.shape[:2]
     H_s = max(32, int(H * scale))
     W_s = max(32, int(W * scale))
@@ -48,24 +44,18 @@ def rescale(img: np.ndarray, scale: float, tile_size: int) -> np.ndarray:
     return img_s[:H_p, :W_p]
 
 
-# predic one model
+# --- PREDICTION ---
 def predict(
-    model: torch.nn.Module | None,
-    img_np: np.ndarray,
-    tile_size: int,
-    overlap: float = 0.5,
-    use_voting: bool = True,
-    progress_label: str = "",
+        model: torch.nn.Module | None,
+        img_np: np.ndarray,
+        tile_size: int,
+        overlap: float = 0.5,
+        use_voting: bool = True,
+        progress_label: str = "",
 ) -> np.ndarray | None:
     """
     Perform semantic segmentation prediction on a large image by splitting it
     into smaller overlapping tiles and stitching the outputs back together.
-
-    overlap:    0.0 = none (sharp edges, faster)
-                0.5 = 50% overlap (smoother edges)
-    use_voting: True  = average probabilities with Gaussian window
-                        (recommended when overlap > 0)
-                False = the last tile overwrite (faster, overlap not used)
     """
     if model is None:
         return None
@@ -145,24 +135,11 @@ def predict(
         return (votes / counts[np.newaxis]).argmax(axis=0).astype(np.uint8)
 
 
-# predict more models
 def predict_all_models(
-    models_cfg: list[dict],
-    img_np: np.ndarray,
+        models_cfg: list[dict],
+        img_np: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    """
-    Run segmentation prediction across multiple models on the same input image
-    and return a dictionary mapping model names to their resulting prediction masks.
-
-    models_cfg: list of dicts:
-        name       — name of the model
-        model      — loaded model Pytorch
-        tile_size  —  size of tile (default 512)
-        overlap    — (default 0.5)
-        use_voting — if use Gaussian window (default True)
-
-    Returns: {model_name: mask_np}
-    """
+    """Run segmentation prediction across multiple models on the same input image."""
     all_preds = {}
     for cfg in models_cfg:
         name = cfg["name"]
@@ -176,8 +153,11 @@ def predict_all_models(
             continue
 
         pred = predict(
-            model, img_np, tile_size,
-            overlap=overlap, use_voting=use_voting,
+            model,
+            img_np,
+            tile_size,
+            overlap=overlap,
+            use_voting=use_voting,
             progress_label=f"[{name}]",
         )
         if pred is not None:
@@ -186,9 +166,9 @@ def predict_all_models(
     return all_preds
 
 
+# --- I/O UTILS ---
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
-    """Load an image from an uploaded Streamlit file object (supports standard image formats
-    and geospatial TIFF files). Returns a tuple of (RGB image array as uint8, ground resolution or None)."""
+    """Load an image from an uploaded Streamlit file object."""
     name = uploaded_file.name.lower()
     raw = uploaded_file.read()
     res_m = None
@@ -196,18 +176,20 @@ def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | No
     try:
         if name.endswith((".tif", ".tiff")):
             tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
-            tmp.write(raw)
-            tmp.close()
-            with rasterio.open(tmp.name) as src:
-                img = reshape_as_image(src.read())
-                # set resolution from metadata or set it manually
-                has_real_georef = src.crs is not None and not src.transform.is_identity
-                if has_real_georef:
-                    try:
-                        res_m = abs(src.transform[0])
-                    except Exception:
-                        pass
-            os.unlink(tmp.name)
+            try:
+                tmp.write(raw)
+                tmp.close()
+                with rasterio.open(tmp.name) as src:
+                    img = reshape_as_image(src.read())
+                    has_real_georef = src.crs is not None and not src.transform.is_identity
+                    if has_real_georef:
+                        try:
+                            res_m = abs(src.transform[0])
+                        except Exception:
+                            pass
+            finally:
+                if os.path.exists(tmp.name):
+                    os.unlink(tmp.name)
         else:
             img = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))
 

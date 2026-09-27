@@ -35,6 +35,8 @@ RESOLUTIONS = {
     "10 m/px": 10.00,
 }
 
+OVERLAY_ALPHA = 0.45
+
 
 def _load_samples(dataset: str, source_res: float = 0.25) -> dict[str, dict[str, str | float]]:
     """

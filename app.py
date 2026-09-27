@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.config import CLASSES, CLASS_HEX
 
 st.set_page_config(
     page_title="Seg-app",
@@ -25,35 +26,32 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# header (left col with available pages, right col with content)
-col_main, col_side = st.columns([2, 1])
+# Nagłówek
+st.markdown("""
+<div style="display:inline-flex;align-items:center;gap:6px;
+     background:rgba(128,128,128,0.08);border:0.5px solid rgba(128,128,128,0.2);
+     border-radius:20px;padding:4px 12px;font-size:12px;color:gray;
+     margin-bottom:1.5rem">
+   Projekt inżynierski
+</div>
+""", unsafe_allow_html=True)
 
-with col_main:
-    st.markdown("""
-    <div style="display:inline-flex;align-items:center;gap:6px;
-         background:rgba(128,128,128,0.08);border:0.5px solid rgba(128,128,128,0.2);
-         border-radius:20px;padding:4px 12px;font-size:12px;color:gray;
-         margin-bottom:1.5rem">
-       Projekt inżynierski
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown("# Segmentacja semantyczna obrazów teledetekcyjnych")
+st.markdown("""
+<p style="font-size:16px;color:gray;line-height:1.8;margin-bottom:2rem">
+Aplikacja służąca do demonstracji modeli CNN i Transformer wytrenowanych
+na wysokorozdzielczych zdjęciach lotniczych i satelitarnych.
+Możliwość wyboru zdjęcia z bazy, wgrania własnego, wybrania modeli
+oraz rozdzielczości do testów.
+</p>
+""", unsafe_allow_html=True)
 
-    st.markdown("# Segmentacja semantyczna obrazów teledetekcyjnych")
-    st.markdown("""
-    <p style="font-size:16px;color:gray;line-height:1.8;margin-bottom:2rem">
-    Aplikacja służąca do demonstracji modeli CNN i Transformer wytrenowanych
-    na wysokorozdzielczych zdjęciach lotniczych i satelitarnych.
-    Możliwość wyboru zdjęcia z bazy, wgrania własnego, wybrania modeli
-    oraz rozdzielczości do testów.
-    </p>
-    """, unsafe_allow_html=True)
-
-    if st.button("Przejdź do segmentacji →", type="primary"):
-        st.switch_page("pages/segmentation.py")
+if st.button("Przejdź do segmentacji →", type="primary"):
+    st.switch_page("pages/segmentation.py")
 
 st.markdown("---")
 
-# three cards describing the functionalities of the app
+# Trzy kafelki opisujące funkcjonalności
 st.markdown("**Co możesz zrobić**")
 c1, c2, c3 = st.columns(3, gap="large")
 
@@ -100,10 +98,8 @@ with c3:
 st.markdown("<div style='margin-top:1.5rem'></div>", unsafe_allow_html=True)
 st.markdown("---")
 
-# segmentation classes
+# Klasy segmentacji
 st.markdown("**Klasy segmentacji**")
-CLASS_HEX = ["#000000", "#8B5A2B", "#228B22", "#4169E1", "#C0C0C0"]
-CLASSES = ["Tło", "Zabudowa", "Lasy", "Woda", "Drogi"]
 
 dots = "".join(
     f'<span style="display:inline-flex;align-items:center;gap:5px;'
@@ -118,7 +114,7 @@ st.markdown(f'<div style="margin:8px 0 1.5rem">{dots}</div>', unsafe_allow_html=
 
 st.markdown("---")
 
-# footer - info about the Data and Models
+# Stopka informacyjna
 st.markdown("""
 <div style="font-size:12px;color:gray;line-height:2.2">
 <b>Zbiory danych:</b>
