@@ -10,8 +10,7 @@ from utils.session import reset_image_state
 
 def render_sample_tab():
     """
-    Streamlit UI controller rendering the tab with samples from BEN and LC datasets
-    for the user to be able to test models
+    Main function to render the sample tab (samples from landcover and bigearthnet datasets)
     """
     dataset_names = list(SAMPLE_IMAGES.keys())
     inner_tabs = st.tabs([f"🗂 {ds}" for ds in dataset_names])

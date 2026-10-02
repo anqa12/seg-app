@@ -1,18 +1,11 @@
-import os
-import io
-import tempfile
 import torch
 import numpy as np
 import cv2
 import streamlit as st
 from scipy.special import softmax as scipy_softmax
-from PIL import Image
-import rasterio
-from rasterio.plot import reshape_as_image
 from utils.config import NUM_CLASSES
 
 
-# --- GAUSSIAN BLENDING ---
 def _gaussian_window(size: int, sigma_ratio: float = 0.25) -> np.ndarray:
     """Generate a 2D Gaussian window to blend overlapping tile predictions."""
     sigma = size * sigma_ratio
@@ -44,7 +37,6 @@ def rescale(img: np.ndarray, scale: float) -> np.ndarray:
     return img_s[:H_p, :W_p]
 
 
-# --- PREDICTION ---
 def predict(
         model: torch.nn.Module | None,
         img_np: np.ndarray,
@@ -164,39 +156,3 @@ def predict_all_models(
             all_preds[name] = pred
 
     return all_preds
-
-
-# --- I/O UTILS ---
-def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
-    """Load an image from an uploaded Streamlit file object."""
-    name = uploaded_file.name.lower()
-    raw = uploaded_file.read()
-    res_m = None
-
-    try:
-        if name.endswith((".tif", ".tiff")):
-            tmp = tempfile.NamedTemporaryFile(suffix=".tif", delete=False)
-            try:
-                tmp.write(raw)
-                tmp.close()
-                with rasterio.open(tmp.name) as src:
-                    img = reshape_as_image(src.read())
-                    has_real_georef = src.crs is not None and not src.transform.is_identity
-                    if has_real_georef:
-                        try:
-                            res_m = abs(src.transform[0])
-                        except Exception:
-                            pass
-            finally:
-                if os.path.exists(tmp.name):
-                    os.unlink(tmp.name)
-        else:
-            img = np.array(Image.open(io.BytesIO(raw)).convert("RGB"))
-
-        if img.ndim == 2:
-            img = np.stack([img] * 3, axis=-1)
-        return img[:, :, :3].astype(np.uint8), res_m
-
-    except Exception as e:
-        st.error(f"Błąd wczytywania pliku: {e}")
-        return None, None

@@ -1,13 +1,11 @@
 import streamlit as st
 
-from utils.inference import load_image_from_upload
+from utils.display import load_image_from_upload
 from utils.session import reset_image_state, set_native_resolution
 
 
+# Clears previously uploaded file and resets the state
 def _clear_upload():
-    """
-    Clears previously uploaded file and resets the state
-    """
 
     if st.session_state.get("img_source") == "upload":
         reset_image_state()
@@ -20,8 +18,8 @@ def _clear_upload():
 
 def render_upload_tab():
     """
-    Streamlit UI component for uploading your own images (JPG/PNG/TIFF)
-    detects resolution from metadata or asks the user when it is missing
+    Main function to render the upload tab (component for uploading user's own images (JPG/PNG/TIFF)
+    detects resolution from metadata or asks the user to provide this information when it is missing)
     """
 
     # upload your own image + detect resolution from the metadata (if available)
@@ -54,7 +52,7 @@ def render_upload_tab():
                     # if no metadata, specify source_res
                     st.session_state["source_res"] = None
 
-    # lookup
+    # preview
     if st.session_state.get("_upload_img_np") is not None:
         img_np = st.session_state["_upload_img_np"]
         detected_res = st.session_state.get("_upload_detected_res")

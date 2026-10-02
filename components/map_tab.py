@@ -14,48 +14,38 @@ from rasterio.transform import from_origin
 
 from utils.session import reset_image_state, set_native_resolution
 
-WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution"
-WMS_LAYER = "Raster"
-WMS_VERSION = "1.3.0"
-WMS_CRS = "EPSG:2180"
+WMS_HIGH_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution"
+WMS_STANDARD_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
 MAX_PX = 4096
 
 POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 24.2}
 
-_t_to_2180 = None
+convert_to_2180_cache = None
 
 
-def _transformer():
-    """
-    Initialize and return a cached pyproj Transformer from geographic coordinates
-    (EPSG:4326) to Polish national grid system (EPSG:2180).
-    """
-    global _t_to_2180
-    if _t_to_2180 is None:
-        _t_to_2180 = Transformer.from_crs("EPSG:4326", "EPSG:2180", always_xy=True)
-    return _t_to_2180
+# caches value for conversion from EPSG:4326 to EPSG:2180
+def _transformed():
+
+    global convert_to_2180_cache
+    if convert_to_2180_cache is None:
+        convert_to_2180_cache = Transformer.from_crs("EPSG:4326", "EPSG:2180", always_xy=True)
+    return convert_to_2180_cache
 
 
+# transforms selected region using cached value
 def _bbox_to_2180(lon_min, lat_min, lon_max, lat_max):
-    """
-    Transform a bounding box from geographic coordinates (EPSG:4326)
-    into Projected Coordinate System EPSG:2180 coordinates.
-    """
-    t = _transformer()
+
+    t = _transformed()
     x_min, y_min = t.transform(lon_min, lat_min)
     x_max, y_max = t.transform(lon_max, lat_max)
     return x_min, y_min, x_max, y_max
 
 
-def _image_size(x_min, y_min, x_max, y_max, target_res: float):
-    """
-    Compute output pixel dimensions (width, height) and actual spatial resolution
-    based on metric dimensions and user constraints, enforcing safety limits (MAX_PX).
-    """
-    w_m = x_max - x_min
-    h_m = y_max - y_min
-    width = int(round(w_m / target_res))
-    height = int(round(h_m / target_res))
+# calculates pixel value for given resolution - takes into account MAX_PX
+def _calc_px(w_m, h_m, res_m: float):
+
+    width = max(1, int(round(w_m / res_m)))
+    height = max(1, int(round(h_m / res_m)))
     if max(width, height) > MAX_PX:
         scale = MAX_PX / max(width, height)
         width = max(64, int(width * scale))
@@ -64,11 +54,67 @@ def _image_size(x_min, y_min, x_max, y_max, target_res: float):
     return width, height, actual_res
 
 
+# downloads raster from WMS 1.1.1 from Geoportal
+def _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height, service_type="high"):
+
+    url = WMS_HIGH_URL if service_type == "high" else WMS_STANDARD_URL
+
+    # round bbox to 2 decimal points
+    bbox_str = f"{x_min:.2f},{y_min:.2f},{x_max:.2f},{y_max:.2f}"
+
+    params = {
+        "SERVICE": "WMS",
+        "VERSION": "1.1.1",
+        "REQUEST": "GetMap",
+        "LAYERS": "Raster",
+        "STYLES": "",
+        "SRS": "EPSG:2180",
+        "BBOX": bbox_str,
+        "WIDTH": str(int(width)),
+        "HEIGHT": str(int(height)),
+        "FORMAT": "image/tiff",
+        "TRANSPARENT": "false",
+    }
+
+    # required website User-Agent, in case of rejecting request (error 401/402/403)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "image/tiff,image/*,*/*",
+    }
+
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=60)
+
+        content_type = resp.headers.get("Content-Type", "")
+        if "xml" in content_type.lower() or "html" in content_type.lower():
+            return None
+
+        resp.raise_for_status()
+        return resp.content
+    except requests.exceptions.Timeout:
+        st.error("Przekroczono czas oczekiwania (60s). Zmniejsz obszar na mapie.")
+        return None
+    except requests.exceptions.HTTPError as e:
+        st.error(f"Błąd serwera Geoportalu ({service_type}): {e}")
+        return None
+    except Exception as e:
+        st.error(f"Błąd połączenia ({service_type}): {e}")
+        return None
+
+
+def _is_blank_image(img_np, threshold=0.98):
+    if img_np is None:
+        return True
+    for channel in range(img_np.shape[2]):
+        ch = img_np[:, :, channel].flatten()
+        most_common_frac = np.bincount(ch).max() / len(ch)
+        if most_common_frac > threshold:
+            return True
+    return False
+
+
+# adds metadata to the .tiff file
 def _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h):
-    """
-    Encode a NumPy image matrix into a GeoTIFF byte array in memory using rasterio,
-    injecting correct geospatial bounds and CRS headers.
-    """
     try:
         transform = from_origin(x_min, y_max, pixel_w, pixel_h)
         h, w = img_np.shape[:2]
@@ -84,73 +130,29 @@ def _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h):
         return None
 
 
-def _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height):
-    """
-    Perform an HTTP GET request to the Geoportal WMS endpoint using standard parameters
-    to pull down map tile data as raw TIFF bytes.
-    """
-    bbox_str = f"{y_min},{x_min},{y_max},{x_max}"
-    params = {
-        "SERVICE": "WMS", "VERSION": WMS_VERSION, "REQUEST": "GetMap",
-        "LAYERS": WMS_LAYER, "STYLES": "", "CRS": WMS_CRS,
-        "BBOX": bbox_str, "WIDTH": str(width), "HEIGHT": str(height),
-        "FORMAT": "image/tiff", "TRANSPARENT": "false",
-    }
-    try:
-        resp = requests.get(WMS_URL, params=params, timeout=60)
-        resp.raise_for_status()
-        return resp.content
-    except requests.exceptions.Timeout:
-        st.error("Przekroczono czas oczekiwania (60s). Spróbuj mniejszy obszar lub niższą rozdzielczość.")
-        return None
-    except Exception as e:
-        st.error(f"Błąd pobierania WMS: {e}")
-        return None
-
-
-# checks if the image is black/white - meaning not available
-def _is_blank_image(img_np, threshold=0.98):
-    """
-    Inspect pixel color distributions across channels to detect uniform placeholder
-    or blank tiles returned when data is missing outside coverage boundaries.
-    """
-
-    if img_np is None:
-        return True
-    for channel in range(img_np.shape[2]):
-        ch = img_np[:, :, channel].flatten()
-        most_common_frac = np.bincount(ch).max() / len(ch)
-        if most_common_frac > threshold:
-            return True
-    return False
-
-
 def render_map_tab():
-    """
-    Main Streamlit UI controller rendering the interactive Folium selector map,
-    bounding box extraction pipeline, WMS downloader logic, and preview/export tools.
-    """
+    """Main function for rendering map tab"""
 
     st.caption(
-        "Narysuj prostokąt na mapie narzędziem (lewy górny róg mapy), "
-        "wybierz rozdzielczość i kliknij **Pobierz**. "
-        "Ortofotomapa dostępna tylko dla Polski."
+        "Narysuj prostokąt na mapie, wybierz tryb pobierania i kliknij **Pobierz**. "
+        "Ortofotomapa Geoportalu dostępna jest wyłącznie dla Polski."
     )
 
-    # resolution
-    res_options = {
-        "10 cm/px  (duże pliki - wolniej)": 0.10,
-        "25 cm/px  (zalecane — dla Landcover)": 0.25,
-        "50 cm/px": 0.50,
-        "1 m/px    (małe pliki - szybciej)": 1.00,
+    # select option for downloading the data
+    mode_options = {
+        "Auto: Najpierw High-Res (10 cm), w razie braku Standard (25 cm)": "auto",
+        "Tylko High-Res (10 cm/px — miasta/aglomeracje)": "force_high",
+        "Tylko Standard (25 cm/px — szybciej, cała Polska)": "force_standard",
     }
-    res_label = st.radio(
-        "Rozdzielczość pobierania", list(res_options.keys()),
-        index=1, horizontal=True,
+    selected_mode_label = st.radio(
+        "Jakość ortofotomapy:",
+        list(mode_options.keys()),
+        index=0,
+        horizontal=False
     )
-    target_res = res_options[res_label]
+    mode = mode_options[selected_mode_label]
 
-    # map creation
+    # map
     m = folium.Map(
         location=[52.0, 19.5], zoom_start=6, min_zoom=5,
         tiles=None, max_bounds=True,
@@ -174,10 +176,8 @@ def render_map_tab():
         edit_options={"edit": True, "remove": True},
     ).add_to(m)
 
-    # bigger map
-    map_data = st_folium(m, height=750, width="100%", key="geoportal_map")
+    map_data = st_folium(m, height=650, width="100%", key="geoportal_map")
 
-    # reading bounding box
     bbox_4326 = None
     if map_data and map_data.get("last_active_drawing"):
         geom = map_data["last_active_drawing"].get("geometry", {})
@@ -192,110 +192,110 @@ def render_map_tab():
         x_min, y_min, x_max, y_max = _bbox_to_2180(lon_min, lat_min, lon_max, lat_max)
         w_m = x_max - x_min
         h_m = y_max - y_min
-        width, height, actual_res = _image_size(x_min, y_min, x_max, y_max, target_res)
-        capped = actual_res > target_res * 1.05
 
-        col_info, col_warn = st.columns([3, 2])
-        with col_info:
-            st.markdown(
-                f"**Obszar:** {w_m/1000:.2f} km × {h_m/1000:.2f} km &nbsp;·&nbsp; "
-                f"**Obraz:** {width} × {height} px &nbsp;·&nbsp; "
-                f"**Rozdzielczość:** `{actual_res:.2f} m/px`"
-            )
-        with col_warn:
-            if capped:
-                st.warning(f"Obszar zbyt duży — przycięty do {MAX_PX} px. "
-                           f"Faktyczna rozdzielczość: {actual_res:.2f} m/px.")
-            elif w_m > 10_000 or h_m > 10_000:
-                st.info("Pobieranie w toku...")
+        st.markdown(
+            f"**Obszar:** {w_m / 1000:.2f} km × {h_m / 1000:.2f} km &nbsp;|&nbsp; "
+            f"**Współrzędne EPSG:2180:** X: `{x_min:.0f}` - `{x_max:.0f}`, Y: `{y_min:.0f}` - `{y_max:.0f}`"
+        )
 
         outside_poland = (
-            lon_max < POLAND_BOUNDS["min_lon"] or lon_min > POLAND_BOUNDS["max_lon"] or
-            lat_max < POLAND_BOUNDS["min_lat"] or lat_min > POLAND_BOUNDS["max_lat"]
+                lon_max < POLAND_BOUNDS["min_lon"] or lon_min > POLAND_BOUNDS["max_lon"] or
+                lat_max < POLAND_BOUNDS["min_lat"] or lat_min > POLAND_BOUNDS["max_lat"]
         )
         if outside_poland:
-            st.error(
-                "Zaznaczony obszar leży poza Polską — ortofotomapa Geoportalu "
-                "dostępna wyłącznie dla terytorium Polski."
-            )
+            st.error("Zaznaczony obszar leży poza Polską.")
 
         if st.button("⬇️ Pobierz ortofotomapę (.tiff)", type="primary",
                      width='stretch', disabled=outside_poland):
-            progress = st.progress(0, text="Łączenie z WMS Geoportalu…")
-            progress.progress(15, text="Wysyłanie zapytania GetMap…")
-            raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height)
+            progress = st.progress(0, text="Łączenie z usługą Geoportalu…")
+            img_np = None
+            used_layer_name = ""
+            actual_res = None
 
-            if raw_bytes is None:
-                progress.empty()
-            else:
-                progress.progress(70, text="Wczytywanie obrazu…")
-                img_np = None
-                try:
-                    img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-                    img_np = np.array(img_pil)
-                except Exception as e:
+            # high resolution
+            if mode in ("auto", "force_high"):
+                progress.progress(20, text="Sprawdzanie HighResolution (10 cm/px)…")
+                w_high, h_high, res_high = _calc_px(w_m, h_m, res_m=0.10)
+                raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, w_high, h_high, service_type="high")
+
+                if raw_bytes:
+                    try:
+                        img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+                        temp_np = np.array(img_pil)
+                        if not _is_blank_image(temp_np):
+                            img_np = temp_np
+                            used_layer_name = "HighResolution (~10 cm/px)"
+                            actual_res = res_high
+                    except Exception:
+                        pass
+
+            # standard resolution (if high resolution fails or if selected option was so
+            if img_np is None:
+                if mode == "force_high":
                     progress.empty()
-                    st.error(f"Nie udało się wczytać pobranego pliku: {e}")
+                    st.error("Brak ortofotomapy HighResolution dla tego obszaru. Zmień tryb na Auto lub Standard.")
+                    st.stop()
+                else:
+                    if mode == "auto":
+                        st.info("Brak pokrycia 10 cm/px. Automatycznie przełączenie na warstwę standardową (25 cm/px)...")
 
-                if img_np is not None:
-                    # validation - downloaded img
-                    if _is_blank_image(img_np):
-                        progress.empty()
-                        st.error(
-                            "Pobrany obraz jest pusty."
-                            "Geoportal nie ma ortofotomapy dla tego obszaru lub "
-                            "żądany fragment leży poza zasięgiem usługi. "
-                            "Spróbuj inny obszar, przesuń prostokąt lub zmniejsz go."
-                        )
-                        # img preview
-                        with st.expander("Podgląd pobranego obrazu."):
-                            st.image(img_np, caption="Obraz uznany za pusty", width=400)
-                    else:
-                        progress.progress(100, text="Gotowe!")
-                        progress.empty()
+                    progress.progress(55, text="Pobieranie StandardResolution (25 cm/px)…")
+                    w_std, h_std, res_std = _calc_px(w_m, h_m, res_m=0.25)
+                    raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, w_std, h_std, service_type="standard")
 
-                        # check resolutions
-                        real_h, real_w = img_np.shape[:2]
-                        if (real_w, real_h) != (width, height):
-                            actual_res = ((w_m / real_w) + (h_m / real_h)) / 2.0
-                            st.warning(
-                                f"Serwer zwrócił {real_w}×{real_h} px zamiast "
-                                f"{width}×{height} px — przeliczam rozdzielczość z "
-                                f"faktycznego rozmiaru: **{actual_res:.2f} m/px**."
-                            )
+                    if raw_bytes:
+                        try:
+                            img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+                            temp_np = np.array(img_pil)
+                            if not _is_blank_image(temp_np):
+                                img_np = temp_np
+                                used_layer_name = "StandardResolution (~25-50 cm/px)"
+                                actual_res = res_std
+                        except Exception as e:
+                            st.error(f"Błąd odczytu obrazu: {e}")
 
-                        pixel_w = w_m / real_w
-                        pixel_h = h_m / real_h
-                        geo_bytes = _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h)
-                        save_bytes = geo_bytes if geo_bytes is not None else raw_bytes
+            # save and summarize
+            if img_np is None:
+                progress.empty()
+                st.error("Nie udało się pobrać zdjęcia (obszar poza zasięgiem lub błąd serwera).")
+            else:
+                progress.progress(85, text="Przygotowywanie GeoTIFF…")
+                real_h, real_w = img_np.shape[:2]
+                pixel_w = w_m / real_w
+                pixel_h = h_m / real_h
+                actual_res = (pixel_w + pixel_h) / 2.0
 
-                        reset_image_state()
-                        st.session_state["img_np"] = img_np
-                        st.session_state["img_source"] = "map"
-                        st.session_state["source_res"] = round(actual_res, 4)
-                        set_native_resolution(actual_res)
+                geo_bytes = _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h)
+                save_bytes = geo_bytes if geo_bytes is not None else raw_bytes
 
-                        st.session_state["_map_img_np"] = img_np
-                        st.session_state["_map_raw_bytes"] = save_bytes
-                        st.session_state["_map_actual_res"] = actual_res
-                        st.session_state["_map_caption"] = (
-                            f"Ortofotomapa Geoportalu — {actual_res:.2f} m/px"
-                        )
-                        st.session_state["_map_filename"] = (
-                            f"ortofoto_{lat_min:.2f}_{lon_min:.2f}"
-                            f"_{actual_res:.2f}mpx.tiff"
-                        )
+                reset_image_state()
+                st.session_state["img_np"] = img_np
+                st.session_state["img_source"] = "map"
+                st.session_state["source_res"] = round(actual_res, 4)
+                set_native_resolution(actual_res)
+
+                st.session_state["_map_img_np"] = img_np
+                st.session_state["_map_raw_bytes"] = save_bytes
+                st.session_state["_map_actual_res"] = actual_res
+                st.session_state["_map_caption"] = (
+                    f"Ortofotomapa Geoportalu — {used_layer_name} ({actual_res:.2f} m/px)"
+                )
+                st.session_state["_map_filename"] = (
+                    f"ortofoto_{lat_min:.2f}_{lon_min:.2f}_{actual_res:.2f}mpx.tiff"
+                )
+                progress.progress(100, text="Pobrano!")
+                progress.empty()
+                st.rerun()
     else:
         if st.session_state.get("_map_img_np") is None:
-            st.caption("Narysuj prostokąt na mapie żeby zobaczyć opcje pobierania.")
+            st.caption("Narysuj prostokąt na mapie, aby odblokować przycisk pobierania.")
 
-    # ortophotomap preview
+    # preview and save on disk button
     if st.session_state.get("_map_img_np") is not None:
         st.success(
-            f"Pobrano ortofotomapę — "
-            f"{st.session_state['_map_img_np'].shape[1]} × "
-            f"{st.session_state['_map_img_np'].shape[0]} px, "
-            f"rozdzielczość: **{st.session_state['_map_actual_res']:.2f} m/px**"
+            f"Pobrano ortofotomapę: "
+            f"{st.session_state['_map_img_np'].shape[1]} × {st.session_state['_map_img_np'].shape[0]} px, "
+            f"rozdzielczość terenowa: **{st.session_state['_map_actual_res']:.2f} m/px**"
         )
         st.image(
             st.session_state["_map_img_np"],

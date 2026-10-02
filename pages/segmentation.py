@@ -30,12 +30,15 @@ _DATASET_DEFAULT_RES = {
     "BigEarthNet": "10 m/px",
 }
 
+
+# chooses the right base model for LC and BEN datasets
 def _default_models_for(dataset_type):
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
     if LANDCOVER_MODELS:
         return [LANDCOVER_MODELS[0]]
     return [list(MODELS.keys())[0]]
+
 
 # session state
 if "source_res" not in st.session_state: st.session_state["source_res"] = 0.25
@@ -113,9 +116,9 @@ with active_container:
     if manual_label:
         default_res = [manual_label]
 
-    # Kolumny bez zbędnego suwaka nakładki
     col_m, col_r, col_v = st.columns([2, 2, 1])
 
+    # choose model
     with col_m:
         st.markdown("**Model / Modele**")
         st.caption("Wybierz jeden lub wiele do porównania")
@@ -137,6 +140,7 @@ with active_container:
                     f"trenowane na zbiorze **{chosen_dataset_type}** — wyniki mogą być słabe."
                 )
 
+    # choose resolution(s)
     with col_r:
         st.markdown("**Rozdzielczość / Rozdzielczości**")
         st.caption("Wybierz jedną lub więcej do porównania")
@@ -147,6 +151,7 @@ with active_container:
             key=f"selected_res_{st.session_state.get('selection_gen', 0)}"
         )
 
+    # advanced settings - gaussian blending
     with col_v:
         st.markdown("**Zaawansowane**")
         with st.expander("⚙️ Kafelkowanie", expanded=False):
@@ -160,6 +165,7 @@ with active_container:
                 help="Uśredniaj nakładające się kafelki oknem Gaussa.",
             )
 
+    # handle possible errors
     n_m, n_r = len(selected_models), len(selected_res)
     if n_m == 0 or n_r == 0:
         st.warning("Wybierz co najmniej jeden model i jedną rozdzielczość.")
@@ -196,7 +202,7 @@ with active_container:
         target_res_m = st.session_state["resolutions"][res_label]
         return source_resolution_m / target_res_m
 
-    # Jeden model, jedna lub wiele rozdzielczości
+    # one model, one or more resolutions
     if n_m == 1 and n_r >= 1:
         model_name = selected_models[0]
         is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
@@ -220,7 +226,7 @@ with active_container:
                     f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
                 )
 
-            # poprawione wywołanie rescale (bez tile_size)
+            # rescale & predict
             img_s = rescale(img_np, actual_scale)
             mask = predict(
                 model, img_s,
@@ -252,7 +258,7 @@ with active_container:
         else:
             render_resolution_comparison(results, mask_gt=mask_gt)
 
-    # Wiele modeli, jedna rozdzielczość
+    # more models, one resolution
     elif n_r == 1 and n_m > 1:
         res_label = selected_res[0]
         actual_scale = calculate_actual_scale(res_label, source_res)
@@ -272,6 +278,7 @@ with active_container:
             if model is None:
                 continue
 
+            # rescale & predict
             img_s = rescale(img_np, actual_scale)
             mask = predict(
                 model, img_s,

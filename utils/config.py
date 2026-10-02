@@ -68,7 +68,7 @@ def _load_samples(dataset: str, source_res: float = 0.25) -> dict[str, dict[str,
                 mask_path = candidate
                 break
 
-        # displayed name
+        # display name
         label = f"test{i}_{suffix}"
 
         samples[label] = {
