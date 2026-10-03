@@ -157,10 +157,10 @@ def _render_row(img: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray | No
         if mask_gt.shape != (h, w):
             mask_gt = cv2.resize(mask_gt, (w, h), interpolation=cv2.INTER_NEAREST)
         cols = st.columns(4)
-        cols[0].image(img[:h, :w], caption="Wejście modelu", use_container_width=True)
-        cols[1].image(mask_to_rgb(mask_gt), caption="Ground Truth", use_container_width=True)
-        cols[2].image(mask_to_rgb(mask_pred), caption="Predykcja", use_container_width=True)
-        cols[3].image(overlay(img, mask_pred), caption="Nakładka", use_container_width=True)
+        cols[0].image(img[:h, :w], caption="Wejście modelu", width="stretch")
+        cols[1].image(mask_to_rgb(mask_gt), caption="Ground Truth", width="stretch")
+        cols[2].image(mask_to_rgb(mask_pred), caption="Predykcja", width="stretch")
+        cols[3].image(overlay(img, mask_pred), caption="Nakładka", width="stretch")
 
         col_gt, col_pred = st.columns(2)
         with col_gt:
@@ -171,9 +171,9 @@ def _render_row(img: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray | No
             render_coverage_tiles(mask_pred)
     else:
         cols = st.columns(3)
-        cols[0].image(img[:h, :w], caption="Wejście modelu", use_container_width=True)
-        cols[1].image(mask_to_rgb(mask_pred), caption="Predykcja", use_container_width=True)
-        cols[2].image(overlay(img, mask_pred), caption="Nakładka", use_container_width=True)
+        cols[0].image(img[:h, :w], caption="Wejście modelu", width="stretch")
+        cols[1].image(mask_to_rgb(mask_pred), caption="Predykcja", width="stretch")
+        cols[2].image(overlay(img, mask_pred), caption="Nakładka", width="stretch")
         st.markdown("**Pokrycie terenu**")
         render_coverage_tiles(mask_pred)
 
@@ -210,11 +210,11 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
 
     st.markdown("##### Porównanie z Ground Truth")
     cols = st.columns(5)
-    cols[0].image(img_input[:h, :w], caption="Oryginał", use_container_width=True)
-    cols[1].image(mask_to_rgb(mask_gt), caption="GT — maska", use_container_width=True)
-    cols[2].image(overlay(img_input, mask_gt), caption="GT — nakładka", use_container_width=True)
-    cols[3].image(mask_to_rgb(mask_pred), caption="Predykcja — maska", use_container_width=True)
-    cols[4].image(overlay(img_input, mask_pred), caption="Predykcja — nakładka", use_container_width=True)
+    cols[0].image(img_input[:h, :w], caption="Oryginał", width="stretch")
+    cols[1].image(mask_to_rgb(mask_gt), caption="GT — maska", width="stretch")
+    cols[2].image(overlay(img_input, mask_gt), caption="GT — nakładka", width="stretch")
+    cols[3].image(mask_to_rgb(mask_pred), caption="Predykcja — maska", width="stretch")
+    cols[4].image(overlay(img_input, mask_pred), caption="Predykcja — nakładka", width="stretch")
 
     if label: st.caption(label)
     render_legend()

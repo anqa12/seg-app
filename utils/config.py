@@ -27,8 +27,8 @@ LANDCOVER_MODELS = [k for k in MODELS if "LandCover" in k]
 BIGEARTHNET_MODELS = [k for k in MODELS if "BigEarthNet" in k]
 
 RESOLUTIONS = {
-    "25 cm/px": 0.25,
-    "50 cm/px": 0.50,
+    "0.25 m/px": 0.25,
+    "0.5 m/px": 0.50,
     "1 m/px": 1.00,
     "2.5 m/px": 2.50,
     "5 m/px": 5.00,

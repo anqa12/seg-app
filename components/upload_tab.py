@@ -46,7 +46,8 @@ def render_upload_tab():
                 st.session_state["_upload_processed_file_id"] = file_id
                 if detected_res:
                     st.session_state["source_res"] = detected_res
-                    set_native_resolution(detected_res)
+                    native_label = set_native_resolution(detected_res)
+                    st.session_state["_upload_native_label"] = native_label
                 else:
 
                     # if no metadata, specify source_res
@@ -90,7 +91,8 @@ def render_upload_tab():
                         if st.session_state.get("_upload_manual_res") != manual_res:
                             st.session_state["_upload_manual_res"] = manual_res
                             st.session_state["source_res"] = manual_res
-                            set_native_resolution(manual_res)
+                            native_label = set_native_resolution(manual_res)
+                            st.session_state["_upload_native_label"] = native_label
                             st.session_state["img_np"] = img_np
                         st.success(f"Ustawiono: **{manual_res} m/px**")
                     except ValueError:

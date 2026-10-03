@@ -17,6 +17,7 @@ _RESET_KEYS = [
     "_upload_img_np",
     "_upload_raw_name",
     "_upload_detected_res",
+    "_upload_native_label",
     "seg_running",   # clears the "segmentation running" state on image change
 ]
 
@@ -33,7 +34,7 @@ def reset_image_state():
 
     # remove the previous state (if it was native)
     resolutions = st.session_state.get("resolutions", {})
-    for label in [l for l in resolutions if l.startswith("Natywna (")]:
+    for label in [l for l in resolutions if l.startswith("wykryta:")]:
         del resolutions[label]
 
 
@@ -43,9 +44,18 @@ def set_native_resolution(value: float) -> str:
     Used by upload_tab.py (resolution detected from metadata) and
     map_tab.py (resolution of the downloaded orthophoto fragment).
     """
-    label = f"wykryta: {value:.2f} m/px"
     resolutions = st.session_state.setdefault("resolutions", {})
+
+    # remove previous resolution in case no duplicates occur
     for old in [l for l in resolutions if l.startswith("wykryta:")]:
         del resolutions[old]
-    resolutions[label] = round(value, 4)
+
+    # if there is the same value, remove it
+    rounded_value = round(value, 2)
+    for existing_label, existing_value in resolutions.items():
+        if round(existing_value, 2) == rounded_value:
+            return existing_label
+
+    label = f"wykryta: {value:.2f} m/px"
+    resolutions[label] = round(value, 4)  # for further calculations
     return label

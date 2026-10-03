@@ -102,16 +102,15 @@ with active_container:
         if wanted in available_resolutions:
             default_res = [wanted]
 
-    if img_source in ("upload", "map"):
-        native_label = next(
-            (l for l in st.session_state["resolutions"] if l.startswith("Natywna (")),
-            None,
-        )
-        if native_label:
-            available_resolutions = list(st.session_state["resolutions"].keys())
-            if native_label not in available_resolutions:
-                available_resolutions.insert(0, native_label)
-            default_res = [native_label]
+    if img_source == "map":
+        native_label = st.session_state.get("_map_native_label")
+    elif img_source == "upload":
+        native_label = st.session_state.get("_upload_native_label")
+    else:
+        native_label = None
+
+    if native_label and native_label in st.session_state["resolutions"]:
+        default_res = [native_label]
 
     if manual_label:
         default_res = [manual_label]
@@ -184,13 +183,13 @@ with active_container:
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
-    if st.button("Uruchom segmentację", type="primary", use_container_width=True):
+    if st.button("Uruchom segmentację", type="primary", width="stretch"):
         st.session_state["seg_running"] = True
 
     running = st.session_state.get("seg_running", False)
 
     if running:
-        if st.button("Zatrzymaj", use_container_width=True):
+        if st.button("Zatrzymaj", width="stretch"):
             st.session_state["seg_running"] = False
             st.warning("Segmentacja została zatrzymana przez użytkownika.")
             st.stop()
