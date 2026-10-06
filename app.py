@@ -6,7 +6,7 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 
-from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX
+from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX, MODELS, RESOLUTIONS, SAMPLE_IMAGES
 
 st.set_page_config(
     page_title="Seg-app",
@@ -16,60 +16,87 @@ st.set_page_config(
 )
 
 
-# Path to the hero image: a segmentation mask whose pixel values are class
-# indices (0-4). Relative to the folder you run `streamlit run` from.
-PREVIEW_IMAGE_PATH = Path("assets/preview.png")
+# Hero images (put them in assets/): the input photo and its segmentation mask.
+# They should show the SAME scene. The mask stores class indices (0-4) and is colored
+# below; the photo can be png/jpg/jpeg/webp, only its name must start with preview_input.
+PREVIEW_MASK_PATH: Path = Path("assets/preview.png")
+PREVIEW_INPUT_PATTERN: str = "preview_input.*"  # e.g. assets/preview_input.jpg
+
+
+def _find_input_image() -> Path | None:
+    """Return the input photo for the hero, whatever its extension is (or None)."""
+    return next(Path("assets").glob(PREVIEW_INPUT_PATTERN), None)
+
+
+def _placeholder(text: str) -> str:
+    """Grey box shown instead of an image that is missing, so the page still loads."""
+    return (
+        '<div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;'
+        'border-radius:8px;background:rgba(128,128,128,0.12);font-size:13px;opacity:0.6">'
+        f"{text}</div>"
+    )
 
 
 @st.cache_data
-def load_preview_html() -> str:
-    """Return the HTML for the hero image, with the mask colored by class.
+def _to_data_uri(path: str, mtime: float, colorize: bool) -> str:
+    """Read an image file and return it as a base64 data URI for an <img> tag.
 
-    What: reads the mask, turns class indices (0..4) into the RGB colors from
-    CLASS_COLORS, and embeds the result as a base64 <img>.
-    Why: a raw mask stores classes as tiny pixel values (0, 1, 2, ...), which look
-    almost black on screen. Coloring it with the same palette as the rest of the
-    app makes it readable. Cached, so it runs once instead of on every rerun.
+    What: for a mask (colorize=True) it turns class indices (0..4) into the RGB colors
+    from CLASS_COLORS; a normal photo (colorize=False) is only converted to RGB.
+    Both are downscaled when large, to keep the page light.
+    Why colorize: a raw mask stores classes as tiny pixel values (0, 1, 2, ...), which
+    look almost black on screen. Coloring it with the app's palette makes it readable.
+    Why mtime: it is not used inside, it is only part of the cache key, so replacing
+    the file on disk refreshes the cached result instead of showing the old image.
     """
-    if not PREVIEW_IMAGE_PATH.exists():
-        # Simple placeholder so the page still loads if the file is missing
-        return (
-            '<div style="aspect-ratio:3/2;display:flex;align-items:center;'
-            'justify-content:center;border-radius:8px;'
-            'background:rgba(128,128,128,0.12);font-size:13px;opacity:0.6">'
-            "Brak obrazka</div>"
-        )
+    img = Image.open(path)
 
-    img = Image.open(PREVIEW_IMAGE_PATH)
-    arr = np.array(img)  # palette ("P") images give class indices directly
-
-    # RGB/RGBA masks: all channels hold the same index, so one channel is enough
-    if arr.ndim == 3:
-        arr = arr[..., 0]
-
-    if arr.max() < len(CLASS_COLORS):
-        # Looks like a class-index mask -> map each index to its color
-        rgb = CLASS_COLORS[arr]
+    if colorize:
+        arr = np.array(img)  # palette ("P") images give class indices directly
+        if arr.ndim == 3:
+            # RGB/RGBA masks: all channels hold the same index, one channel is enough
+            arr = arr[..., 0]
+        if arr.max() < len(CLASS_COLORS):
+            rgb = CLASS_COLORS[arr]  # class-index mask -> map each index to its color
+        else:
+            rgb = np.array(img.convert("RGB"))  # values too large: already colored
+        out = Image.fromarray(rgb)
     else:
-        # Values too large to be class indices: the image is already colored
-        rgb = np.array(img.convert("RGB"))
+        out = img.convert("RGB")
 
-    out = Image.fromarray(rgb)
-
-    # Downscale big masks to keep the page light. NEAREST keeps class borders
-    # sharp (smoother filters would blend colors into classes that don't exist).
-    max_width = 1200
+    # Each of the two images only takes half of the hero, so 800 px is plenty.
+    # NEAREST for masks keeps class borders sharp (smoother filters would blend colors
+    # into classes that don't exist); LANCZOS gives the best quality for a photo.
+    max_width = 800
     if out.width > max_width:
         new_height = round(out.height * max_width / out.width)
-        out = out.resize((max_width, new_height), Image.NEAREST)
+        out = out.resize((max_width, new_height), Image.NEAREST if colorize else Image.LANCZOS)
 
     buf = io.BytesIO()
-    out.save(buf, format="PNG")
-    data = base64.b64encode(buf.getvalue()).decode()
-    return (
-        f'<img src="data:image/png;base64,{data}" alt="Wynik segmentacji" '
-        'style="width:100%;display:block;border-radius:8px">'
-    )
+    if colorize:
+        out.save(buf, format="PNG")  # lossless: exact class colors
+        mime = "image/png"
+    else:
+        out.save(buf, format="JPEG", quality=90)  # photos are much smaller as JPEG
+        mime = "image/jpeg"
+    return f"data:{mime};base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _preview_item(path: Path | None, caption: str, colorize: bool, missing: str) -> str:
+    """One image with its caption (or a placeholder if the file does not exist)."""
+    if path is None or not path.exists():
+        body = _placeholder(missing)
+    else:
+        uri = _to_data_uri(str(path), path.stat().st_mtime, colorize)
+        body = f'<img class="pair-img" src="{uri}" alt="{caption}">'
+    return f'<div class="pair-item">{body}<div class="pair-cap">{caption}</div></div>'
+
+
+def load_preview_html() -> str:
+    """Return the HTML of the hero preview: input photo -> segmentation mask."""
+    photo = _preview_item(_find_input_image(), "Zdjęcie wejściowe", colorize=False, missing="Brak zdjęcia")
+    mask = _preview_item(PREVIEW_MASK_PATH, "Wynik segmentacji", colorize=True, missing="Brak maski")
+    return f'<div class="preview"><div class="pair">{photo}<div class="arrow">→</div>{mask}</div></div>'
 
 
 # ---------------------------------------------------------------------------
@@ -126,18 +153,25 @@ st.markdown("""
     border: none;
 }
 
-/* Preview of the fake segmentation mask (right side of the hero) */
+/* Hero preview (right side): input photo -> segmentation mask */
 .preview {
     border: 1px solid rgba(128, 128, 128, 0.22);
     border-radius: 14px;
-    padding: 10px;
+    padding: 12px;
 }
-.preview svg { display: block; border-radius: 8px; }
-.preview .caption {
-    font-size: 12px;
-    opacity: 0.55;
-    margin: 8px 2px 0 2px;
+.pair { display: flex; align-items: center; gap: 10px; }
+.pair-item { flex: 1; min-width: 0; }
+/* Square + cover => both images always have exactly the same size */
+.pair-img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    display: block;
+    border-radius: 8px;
 }
+.pair-cap { font-size: 12px; opacity: 0.55; margin-top: 8px; text-align: center; }
+/* bottom padding ~ caption height, so the arrow sits at the middle of the images */
+.arrow { font-size: 20px; opacity: 0.45; padding-bottom: 24px; }
 
 /* Row of key numbers */
 .stats {
@@ -232,21 +266,17 @@ modele i rozdzielczość, a następnie porównaj wyniki.
         st.switch_page("pages/segmentation.py")
 
 with right:
-    st.markdown(
-        f'<div class="preview">{load_preview_html()}'
-        f'<div class="caption">Przykładowy wynik segmentacji</div></div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(load_preview_html(), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Key numbers (class count comes from config so it stays in sync)
+# Key numbers (model, dataset, class and resolution counts come from config so they stay in sync)
 # ---------------------------------------------------------------------------
 st.markdown(f"""
 <div class="stats">
-<div class="stat"><div class="num">6</div><div class="label">modeli do porównania</div></div>
-<div class="stat"><div class="num">2</div><div class="label">zbiory danych</div></div>
+<div class="stat"><div class="num">{len(MODELS)}</div><div class="label">modeli do porównania</div></div>
+<div class="stat"><div class="num">{len(SAMPLE_IMAGES)}</div><div class="label">zbiory danych</div></div>
 <div class="stat"><div class="num">{len(CLASSES)}</div><div class="label">klas segmentacji</div></div>
-<div class="stat"><div class="num">25 cm – 10 m</div><div class="label">zakres rozdzielczości</div></div>
+<div class="stat"><div class="num">{len(RESOLUTIONS)}</div><div class="label">poziomów rozdzielczości do testów</div></div>
 </div>
 """, unsafe_allow_html=True)
 

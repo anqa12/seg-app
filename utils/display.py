@@ -93,7 +93,7 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     return {"iou": iou, "f1": f1}
 
 
-def render_legend():
+def render_legend() -> None:
     items = "".join(
         f'<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:13px">'
         f'<span style="width:13px;height:13px;border-radius:3px;background:{CLASS_HEX[i]};border:1px solid rgba(0,0,0,.2)"></span>'
@@ -103,7 +103,7 @@ def render_legend():
     st.markdown(f'<div style="margin:8px 0 14px 0">{items}</div>', unsafe_allow_html=True)
 
 
-def render_coverage_tiles(mask: np.ndarray):
+def render_coverage_tiles(mask: np.ndarray) -> None:
     pct = class_percentages(mask)
     items = list(pct.items())
 
@@ -137,7 +137,7 @@ def render_coverage_tiles(mask: np.ndarray):
 _BEST_STYLE = "background-color: rgba(46,160,67,0.22); color: #2EA043; font-weight: 700"
 
 
-def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best_class_by: str | None = None):
+def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best_class_by: str | None = None) -> None:
     """Show a metrics table.
 
     highlight_best: in every metric column the best (highest) value is shown in green,
@@ -190,8 +190,11 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
 # Why: with more columns the images get too small to compare by eye.
 MAX_PRED_COLS = 3
 
+# One column of the comparison grid: (label, input image, predicted mask)
+GridItem = tuple[str, np.ndarray, np.ndarray]
 
-def _make_columns(n_used: int):
+
+def _make_columns(n_used: int) -> list:
     """Create the grid columns and return only the ones that hold content.
 
     What: with 3 or more content columns they simply share the full width equally.
@@ -278,7 +281,13 @@ def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = No
     return head + grid
 
 
-def _render_image_row(chunk, ref_img, gt_fit, n_cols: int, as_overlay: bool):
+def _render_image_row(
+        chunk: list[GridItem],
+        ref_img: np.ndarray,
+        gt_fit: np.ndarray | None,
+        n_cols: int,
+        as_overlay: bool,
+) -> None:
     """One row of images: Original | (Ground Truth) | prediction 1 | prediction 2 ...
 
     What: shows either the plain masks or the masks blended over the original.
@@ -298,7 +307,7 @@ def _render_image_row(chunk, ref_img, gt_fit, n_cols: int, as_overlay: bool):
         col.image(view, caption=label, width="stretch")
 
 
-def _render_coverage_row(chunk, mask_gt, n_cols: int):
+def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_cols: int) -> None:
     """Coverage tiles placed directly under the images, column by column.
 
     What: the tiles of Ground Truth and of every prediction sit under their own image.
@@ -321,7 +330,7 @@ def _render_coverage_row(chunk, mask_gt, n_cols: int):
         col.markdown(_coverage_tiles_html(label, mask, ref_pct), unsafe_allow_html=True)
 
 
-def _render_grid(items: list[tuple[str, np.ndarray, np.ndarray]], mask_gt: np.ndarray | None = None):
+def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> None:
     """Shared renderer for all views: a comparison grid.
 
     items: list of (label, input image, predicted mask). One item = a single result,
@@ -362,7 +371,7 @@ def _render_grid(items: list[tuple[str, np.ndarray, np.ndarray]], mask_gt: np.nd
     st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
 
 
-def _render_summary_table(group_col_name: str, items: list[tuple[str, np.ndarray]], mask_gt: np.ndarray):
+def _render_summary_table(group_col_name: str, items: list[tuple[str, np.ndarray]], mask_gt: np.ndarray) -> None:
     """Tworzy tabelę mIoU / mF1 porównującą predykcje z GT."""
     with st.expander(f"Metryki per {group_col_name.lower()}", expanded=True):
         rows = []
@@ -380,13 +389,13 @@ def _render_summary_table(group_col_name: str, items: list[tuple[str, np.ndarray
 
 # --- GŁÓWNE WIDOKI DLA APLIKACJI ---
 
-def render_result_block(img_input: np.ndarray, mask: np.ndarray, label: str = ""):
+def render_result_block(img_input: np.ndarray, mask: np.ndarray, label: str = "") -> None:
     if label: st.caption(label)
     render_legend()
     _render_grid([("Predykcja", img_input, mask)], mask_gt=None)
 
 
-def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray, label: str = ""):
+def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray, label: str = "") -> None:
     """Pojedyncza predykcja obok Ground Truth, z pokryciem terenu i metrykami per klasa."""
     h, w = mask_pred.shape
     mask_gt = _fit_mask(mask_gt, (h, w))
@@ -407,7 +416,7 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
         render_metrics_table(rows, best_class_by="IoU")
 
 
-def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None = None):
+def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None = None) -> None:
     if not results: return
     render_legend()
     # Each column is labelled with the resolution and the size of the rescaled image
@@ -421,7 +430,7 @@ def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None
         _render_summary_table("Rozdzielczość", [(r["label"], r["mask"]) for r in results], mask_gt)
 
 
-def render_model_comparison(img_input: np.ndarray, model_results: dict, mask_gt: np.ndarray | None = None):
+def render_model_comparison(img_input: np.ndarray, model_results: dict, mask_gt: np.ndarray | None = None) -> None:
     render_legend()
     # All models ran on the same input, so every column shares img_input
     items = [(name, img_input, mask) for name, mask in model_results.items()]

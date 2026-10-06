@@ -1,7 +1,7 @@
 import streamlit as st
 
 # keys describing the CURRENTLY selected image and its source — cleared on every source change
-_RESET_KEYS = [
+_RESET_KEYS: list[str] = [
     "img_np",
     "img_source",
     "mask_gt",
@@ -22,7 +22,7 @@ _RESET_KEYS = [
 ]
 
 
-def reset_image_state():
+def reset_image_state() -> None:
     """Clears all image state from the previous image."""
     for key in _RESET_KEYS:
         st.session_state.pop(key, None)
@@ -34,8 +34,8 @@ def reset_image_state():
 
     # remove the previous state (if it was native)
     resolutions = st.session_state.get("resolutions", {})
-    for label in [l for l in resolutions if l.startswith("wykryta:")]:
-        del resolutions[label]
+    for name in [n for n in resolutions if n.startswith("wykryta:")]:
+        del resolutions[name]
 
 
 def set_native_resolution(value: float) -> str:
@@ -47,10 +47,10 @@ def set_native_resolution(value: float) -> str:
     resolutions = st.session_state.setdefault("resolutions", {})
 
     # remove previous resolution in case no duplicates occur
-    for old in [l for l in resolutions if l.startswith("wykryta:")]:
+    for old in [n for n in resolutions if n.startswith("wykryta:")]:
         del resolutions[old]
 
-    # if there is the same value, remove it
+    # if a resolution with the same value already exists, reuse its label (no duplicates)
     rounded_value = round(value, 2)
     for existing_label, existing_value in resolutions.items():
         if round(existing_value, 2) == rounded_value:

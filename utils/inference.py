@@ -26,15 +26,17 @@ def _get_window(tile_size: int) -> np.ndarray:
 
 
 def rescale(img: np.ndarray, scale: float) -> np.ndarray:
-    """Rescale the image to a multiple of 32 (UNet requirement)."""
+    """
+    Rescale the image to the nearest multiple of 32 (UNet requirement)
+    without cropping valid terrain data.
+    """
     H, W = img.shape[:2]
-    H_s = max(32, int(H * scale))
-    W_s = max(32, int(W * scale))
-    img_s = cv2.resize(img, (W_s, H_s), interpolation=cv2.INTER_AREA)
+    # Compute target dimensions snapped to the nearest multiple of 32
+    H_s = max(32, int(round((H * scale) / 32.0)) * 32)
+    W_s = max(32, int(round((W * scale) / 32.0)) * 32)
 
-    H_p = (H_s // 32) * 32
-    W_p = (W_s // 32) * 32
-    return img_s[:H_p, :W_p]
+    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+    return cv2.resize(img, (W_s, H_s), interpolation=interp)
 
 
 # Smallest side (in px) the image may have after downscaling.
@@ -43,23 +45,35 @@ def rescale(img: np.ndarray, scale: float) -> np.ndarray:
 # the model would then segment a deformed picture. Below this limit we refuse instead.
 MIN_SIDE_PX = 32
 
+# Largest part of a side (0.10 = 10 %) that may be cut off when rescale() trims the
+# image down to a multiple of 32.
+# Why: for big images the trim is a few pixels, but for a small one it can remove a
+# large piece (51 px -> 32 px loses over a third), so the result would show only a
+# fragment of the original scene.
+# MAX_CROP_FRACTION = 0.10
 
-def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
-    """Check whether the image can be rescaled by `scale` without being deformed.
 
-    What: computes the size the image would have after rescaling (same formula as
-    rescale()) and compares its shorter side with MIN_SIDE_PX.
-    Returns (True, "") if it is fine, otherwise (False, reason in Polish for the UI).
-    Why a separate function: the app can warn and skip such a resolution BEFORE
-    running the model, instead of producing a meaningless prediction.
+def check_rescale(img_shape: tuple, scale: float, allow_upscale: bool = False) -> tuple[bool, str]:
+    """Check whether the target dimensions meet resolution constraints.
+
+    Rejects upscaling (scale > 1.0) and downscaling below minimum side length.
     """
+    # Blokada interpolacji w górę (np. 1 m/px -> 0.25 m/px to scale = 4.0)
+    if not allow_upscale and scale > 1.02:
+        return False, (
+            f"skala {scale:.1f}× oznacza próbę zwiększenia rozdzielczości "
+            f"powyżej jakości źródłowej, co jest zablokowane."
+        )
+
     H, W = img_shape[:2]
-    H_s, W_s = int(H * scale), int(W * scale)
+    H_s, W_s = int(round(H * scale)), int(round(W * scale))
+
     if min(H_s, W_s) < MIN_SIDE_PX:
         return False, (
             f"po zmniejszeniu zdjęcie miałoby {W_s}×{H_s} px "
             f"(minimum to {MIN_SIDE_PX} px na bok), więc zostałoby zdeformowane."
         )
+
     return True, ""
 
 

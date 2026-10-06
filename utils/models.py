@@ -4,7 +4,7 @@ import segmentation_models_pytorch as smp
 from utils.config import NUM_CLASSES, MODELS
 
 
-def _build_model(encoder_key: str):
+def _build_model(encoder_key: str) -> torch.nn.Module:
     """Build architecture based on key from config.MODELS."""
     if encoder_key == "unet_resnet34":
         return smp.Unet(
@@ -26,7 +26,7 @@ def _build_model(encoder_key: str):
 
 
 @st.cache_resource(show_spinner=False)
-def load_model(model_name: str):
+def load_model(model_name: str) -> torch.nn.Module | None:
     """
     Builds and loads models weights. Done with caching - each model load only once per session.
     """

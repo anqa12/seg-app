@@ -26,13 +26,13 @@ st.title("Segmentacja semantyczna obrazów teledetekcyjnych")
 st.markdown("---")
 
 _DATASET_DEFAULT_RES = {
-    "LandCover":   "25 cm/px",
+    "LandCover":   "0.25 m/px",
     "BigEarthNet": "10 m/px",
 }
 
 
 # chooses the right base model for LC and BEN datasets
-def _default_models_for(dataset_type):
+def _default_models_for(dataset_type: str | None) -> list[str]:
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
     if LANDCOVER_MODELS:
@@ -41,8 +41,7 @@ def _default_models_for(dataset_type):
 
 
 # how much the source image has to be scaled to reach the chosen resolution
-# (moved up from the results section: it is also needed to filter the resolutions below)
-def calculate_actual_scale(res_label, source_resolution_m):
+def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
 
@@ -99,8 +98,17 @@ with active_container:
         source_res = st.session_state["resolutions"][manual_label]
         st.session_state["source_res"] = source_res
 
-    available_resolutions = list(st.session_state["resolutions"].keys())
-    default_res = [available_resolutions[0]]
+    # Filter out higher resolutions (prevent upsampling beyond source quality)
+    all_res = st.session_state["resolutions"]
+    if source_res is not None:
+        available_resolutions = [
+            label for label, res_m in all_res.items()
+            if res_m >= (source_res - 1e-4)
+        ]
+    else:
+        available_resolutions = list(all_res.keys())
+
+    default_res = [available_resolutions[0]] if available_resolutions else []
 
     chosen_dataset_type = st.session_state.get("chosen_dataset_type")
 
@@ -116,11 +124,16 @@ with active_container:
     else:
         native_label = None
 
-    if native_label and native_label in st.session_state["resolutions"]:
+    if native_label and native_label in available_resolutions:
         default_res = [native_label]
 
-    if manual_label:
+    if manual_label and manual_label in available_resolutions:
         default_res = [manual_label]
+
+    # fallback if default is not in filtered list
+    default_res = [r for r in default_res if r in available_resolutions]
+    if not default_res and available_resolutions:
+        default_res = [available_resolutions[0]]
 
     col_m, col_r, col_v = st.columns([2, 2, 1])
 
@@ -172,8 +185,6 @@ with active_container:
             )
 
     # skip resolutions this image cannot be downscaled to without being deformed
-    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image) - warn instead of
-    # running the model on a distorted picture
     unavailable = {}
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
@@ -206,13 +217,13 @@ with active_container:
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
-    if st.button("Uruchom segmentację", type="primary", width="stretch"):
+    if st.button("Uruchom segmentację", type="primary", use_container_width=True):
         st.session_state["seg_running"] = True
 
     running = st.session_state.get("seg_running", False)
 
     if running:
-        if st.button("Zatrzymaj", width="stretch"):
+        if st.button("Zatrzymaj", use_container_width=True):
             st.session_state["seg_running"] = False
             st.warning("Segmentacja została zatrzymana przez użytkownika.")
             st.stop()
@@ -223,7 +234,6 @@ with active_container:
     # one model, one or more resolutions
     if n_m == 1 and n_r >= 1:
         model_name = selected_models[0]
-        is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
 
         with st.spinner(f"Ładowanie modelu {model_name}…"):
             model = load_model(model_name)
@@ -237,12 +247,6 @@ with active_container:
         results = []
         for res_label in selected_res:
             actual_scale = calculate_actual_scale(res_label, source_res)
-
-            if actual_scale > 1.5:
-                st.caption(
-                    f"{res_label}: powiększenie {actual_scale:.1f}× "
-                    f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
-                )
 
             # rescale & predict
             img_s = rescale(img_np, actual_scale)
@@ -281,15 +285,11 @@ with active_container:
         res_label = selected_res[0]
         actual_scale = calculate_actual_scale(res_label, source_res)
 
-        if actual_scale > 1.5:
-            st.caption(f"{res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
-
         model_results = {}
         for model_name in selected_models:
             ts = MODELS[model_name]["tile"]
             model_overlap = MODELS[model_name].get("overlap", overlap)
             model_voting = MODELS[model_name].get("use_voting", use_voting)
-            is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
 
             with st.spinner(f"Ładowanie {model_name}…"):
                 model = load_model(model_name)
