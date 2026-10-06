@@ -37,6 +37,32 @@ def rescale(img: np.ndarray, scale: float) -> np.ndarray:
     return img_s[:H_p, :W_p]
 
 
+# Smallest side (in px) the image may have after downscaling.
+# Why: rescale() forces every side up to at least 32 px. For a very small target
+# resolution that silently stretches the image into a different aspect ratio, and
+# the model would then segment a deformed picture. Below this limit we refuse instead.
+MIN_SIDE_PX = 32
+
+
+def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
+    """Check whether the image can be rescaled by `scale` without being deformed.
+
+    What: computes the size the image would have after rescaling (same formula as
+    rescale()) and compares its shorter side with MIN_SIDE_PX.
+    Returns (True, "") if it is fine, otherwise (False, reason in Polish for the UI).
+    Why a separate function: the app can warn and skip such a resolution BEFORE
+    running the model, instead of producing a meaningless prediction.
+    """
+    H, W = img_shape[:2]
+    H_s, W_s = int(H * scale), int(W * scale)
+    if min(H_s, W_s) < MIN_SIDE_PX:
+        return False, (
+            f"po zmniejszeniu zdjęcie miałoby {W_s}×{H_s} px "
+            f"(minimum to {MIN_SIDE_PX} px na bok), więc zostałoby zdeformowane."
+        )
+    return True, ""
+
+
 def predict(
         model: torch.nn.Module | None,
         img_np: np.ndarray,

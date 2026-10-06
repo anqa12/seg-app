@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS
 from utils.models import load_model
-from utils.inference import rescale, predict
+from utils.inference import rescale, predict, check_rescale
 from utils.display import (render_result_block, render_resolution_comparison,
                            render_model_comparison, render_gt_comparison)
 from components.sample_tab import render_sample_tab
@@ -38,6 +38,13 @@ def _default_models_for(dataset_type):
     if LANDCOVER_MODELS:
         return [LANDCOVER_MODELS[0]]
     return [list(MODELS.keys())[0]]
+
+
+# how much the source image has to be scaled to reach the chosen resolution
+# (moved up from the results section: it is also needed to filter the resolutions below)
+def calculate_actual_scale(res_label, source_resolution_m):
+    target_res_m = st.session_state["resolutions"][res_label]
+    return source_resolution_m / target_res_m
 
 
 # session state
@@ -164,6 +171,22 @@ with active_container:
                 help="Uśredniaj nakładające się kafelki oknem Gaussa.",
             )
 
+    # skip resolutions this image cannot be downscaled to without being deformed
+    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image) - warn instead of
+    # running the model on a distorted picture
+    unavailable = {}
+    for res_label in selected_res:
+        ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
+        if not ok:
+            unavailable[res_label] = reason
+
+    if unavailable:
+        for res_label, reason in unavailable.items():
+            st.warning(f"**{res_label}** — pominięto: {reason}")
+        selected_res = [r for r in selected_res if r not in unavailable]
+        if not selected_res:
+            st.stop()
+
     # handle possible errors
     n_m, n_r = len(selected_models), len(selected_res)
     if n_m == 0 or n_r == 0:
@@ -196,10 +219,6 @@ with active_container:
 
     if not running:
         st.stop()
-
-    def calculate_actual_scale(res_label, source_resolution_m):
-        target_res_m = st.session_state["resolutions"][res_label]
-        return source_resolution_m / target_res_m
 
     # one model, one or more resolutions
     if n_m == 1 and n_r >= 1:
