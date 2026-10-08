@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS
 from utils.models import load_model
-from utils.inference import rescale, predict, check_rescale
+from utils.inference import rescale, predict, check_rescale, count_tiles
 from utils.display import (render_result_block, render_resolution_comparison,
                            render_model_comparison, render_gt_comparison)
 from components.sample_tab import render_sample_tab
@@ -41,9 +41,23 @@ def _default_models_for(dataset_type: str | None) -> list[str]:
 
 
 # how much the source image has to be scaled to reach the chosen resolution
+# (moved up from the results section: it is also needed to filter the resolutions below)
 def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
+
+
+# how many tiles each selected model x resolution combination would be cut into
+# (1 = the image fits in a single tile, so overlap and voting change nothing)
+def _tile_counts(img_shape: tuple, models: list[str], resolutions: list[str],
+                 source_resolution_m: float, overlap_value: float) -> list[int]:
+    counts = []
+    for model_name in models:
+        for res_label in resolutions:
+            scale = calculate_actual_scale(res_label, source_resolution_m)
+            if check_rescale(img_shape, scale)[0]:  # skip resolutions that will be rejected anyway
+                counts.append(count_tiles(img_shape, scale, MODELS[model_name]["tile"], overlap_value))
+    return counts
 
 
 # session state
@@ -98,17 +112,8 @@ with active_container:
         source_res = st.session_state["resolutions"][manual_label]
         st.session_state["source_res"] = source_res
 
-    # Filter out higher resolutions (prevent upsampling beyond source quality)
-    all_res = st.session_state["resolutions"]
-    if source_res is not None:
-        available_resolutions = [
-            label for label, res_m in all_res.items()
-            if res_m >= (source_res - 1e-4)
-        ]
-    else:
-        available_resolutions = list(all_res.keys())
-
-    default_res = [available_resolutions[0]] if available_resolutions else []
+    available_resolutions = list(st.session_state["resolutions"].keys())
+    default_res = [available_resolutions[0]]
 
     chosen_dataset_type = st.session_state.get("chosen_dataset_type")
 
@@ -124,16 +129,11 @@ with active_container:
     else:
         native_label = None
 
-    if native_label and native_label in available_resolutions:
+    if native_label and native_label in st.session_state["resolutions"]:
         default_res = [native_label]
 
-    if manual_label and manual_label in available_resolutions:
+    if manual_label:
         default_res = [manual_label]
-
-    # fallback if default is not in filtered list
-    default_res = [r for r in default_res if r in available_resolutions]
-    if not default_res and available_resolutions:
-        default_res = [available_resolutions[0]]
 
     col_m, col_r, col_v = st.columns([2, 2, 1])
 
@@ -171,20 +171,37 @@ with active_container:
         )
 
     # advanced settings - gaussian blending
+    # The panel is shown only when the image really gets cut into tiles (large photos from
+    # the map or uploads). Ready-made test images fit in one tile, so there is nothing to set.
+    overlap, use_voting = 0.25, True  # used when the panel is hidden
     with col_v:
         st.markdown("**Zaawansowane**")
-        with st.expander("⚙️ Kafelkowanie", expanded=False):
-            overlap = st.slider(
-                "Overlap kafelków:", 0.0, 0.5, 0.5, 0.1,
-                help="0 = szybciej  |  0.5 = gładsze granice",
-            )
-            use_voting = st.checkbox(
-                "Gaussian voting",
-                value=True,
-                help="Uśredniaj nakładające się kafelki oknem Gaussa.",
-            )
+        if max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, 0.0), default=1) > 1:
+            with st.expander("⚙️ Kafelkowanie", expanded=False):
+                # default 0.25 = about half as many tiles as 0.5, so noticeably faster;
+                # step 0.05 so that the default sits exactly on the slider grid
+                overlap = st.slider(
+                    "Nakładanie się kafelków:", 0.0, 0.5, 0.25, 0.05,
+                    help="Większe = gładsze granice między kafelkami, ale dłuższe liczenie. "
+                         "0 = najszybciej, 0.5 = najgładziej.",
+                )
+                # with no overlap there is (almost) nothing to blend, so the option is greyed out
+                use_voting = st.checkbox(
+                    "Łączenie kafelków (Gaussian voting)",
+                    value=True,
+                    disabled=(overlap == 0),
+                    help="Łączy wyniki z nakładających się kafelków (im bliżej brzegu kafelka, "
+                         "tym mniejsza waga), żeby nie było widać szwów. "
+                         "Przy nakładaniu 0 nieaktywne.",
+                )
+                n_tiles = max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, overlap))
+                st.caption(f"Przy tych ustawieniach: do {n_tiles} kafelków na zdjęcie.")
+        else:
+            st.caption("Zdjęcie mieści się w jednym kafelku modelu, więc kafelkowanie nie jest potrzebne.")
 
     # skip resolutions this image cannot be downscaled to without being deformed
+    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image) - warn instead of
+    # running the model on a distorted picture
     unavailable = {}
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
@@ -217,13 +234,13 @@ with active_container:
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
-    if st.button("Uruchom segmentację", type="primary", use_container_width=True):
+    if st.button("Uruchom segmentację", type="primary", width="stretch"):
         st.session_state["seg_running"] = True
 
     running = st.session_state.get("seg_running", False)
 
     if running:
-        if st.button("Zatrzymaj", use_container_width=True):
+        if st.button("Zatrzymaj", width="stretch"):
             st.session_state["seg_running"] = False
             st.warning("Segmentacja została zatrzymana przez użytkownika.")
             st.stop()
@@ -234,6 +251,7 @@ with active_container:
     # one model, one or more resolutions
     if n_m == 1 and n_r >= 1:
         model_name = selected_models[0]
+        is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
 
         with st.spinner(f"Ładowanie modelu {model_name}…"):
             model = load_model(model_name)
@@ -247,6 +265,12 @@ with active_container:
         results = []
         for res_label in selected_res:
             actual_scale = calculate_actual_scale(res_label, source_res)
+
+            if actual_scale > 1.5:
+                st.caption(
+                    f"{res_label}: powiększenie {actual_scale:.1f}× "
+                    f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
+                )
 
             # rescale & predict
             img_s = rescale(img_np, actual_scale)
@@ -285,11 +309,15 @@ with active_container:
         res_label = selected_res[0]
         actual_scale = calculate_actual_scale(res_label, source_res)
 
+        if actual_scale > 1.5:
+            st.caption(f"{res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
+
         model_results = {}
         for model_name in selected_models:
             ts = MODELS[model_name]["tile"]
             model_overlap = MODELS[model_name].get("overlap", overlap)
             model_voting = MODELS[model_name].get("use_voting", use_voting)
+            is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
 
             with st.spinner(f"Ładowanie {model_name}…"):
                 model = load_model(model_name)

@@ -1,5 +1,7 @@
 import base64
+import importlib
 import io
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -16,16 +18,31 @@ st.set_page_config(
 )
 
 
-# Hero images (put them in assets/): the input photo and its segmentation mask.
-# They should show the SAME scene. The mask stores class indices (0-4) and is colored
-# below; the photo can be png/jpg/jpeg/webp, only its name must start with preview_input.
-PREVIEW_MASK_PATH: Path = Path("assets/preview.png")
-PREVIEW_INPUT_PATTERN: str = "preview_input.*"  # e.g. assets/preview_input.jpg
+@st.cache_resource(show_spinner=False)
+def _warm_up_imports() -> bool:
+    """Import the heavy libraries in the background while the home page is shown."""
+
+    def _work() -> None:
+        for name in (
+                "torch", "segmentation_models_pytorch", "cv2", "rasterio", "pandas",
+                "utils.models", "utils.inference", "utils.display",
+                "components.sample_tab", "components.upload_tab", "components.map_tab",
+        ):
+            try:
+                importlib.import_module(name)
+            except Exception:
+                pass
+
+    threading.Thread(target=_work, daemon=True).start()
+    return True
 
 
-def _find_input_image() -> Path | None:
-    """Return the input photo for the hero, whatever its extension is (or None)."""
-    return next(Path("assets").glob(PREVIEW_INPUT_PATTERN), None)
+_warm_up_imports()
+
+
+# sample image and corresponding mask
+PREVIEW_MASK_PATH: Path = Path("assets/preview_mask.png")
+PREVIEW_IMAGE_PATH: Path = Path("assets/preview_img.jpg")
 
 
 def _placeholder(text: str) -> str:
@@ -41,12 +58,9 @@ def _placeholder(text: str) -> str:
 def _to_data_uri(path: str, mtime: float, colorize: bool) -> str:
     """Read an image file and return it as a base64 data URI for an <img> tag.
 
-    What: for a mask (colorize=True) it turns class indices (0..4) into the RGB colors
+    - (colorize=True) it turns class indices (0..4) into the RGB colors
     from CLASS_COLORS; a normal photo (colorize=False) is only converted to RGB.
-    Both are downscaled when large, to keep the page light.
-    Why colorize: a raw mask stores classes as tiny pixel values (0, 1, 2, ...), which
-    look almost black on screen. Coloring it with the app's palette makes it readable.
-    Why mtime: it is not used inside, it is only part of the cache key, so replacing
+    - mtime: it is not used inside, it is only part of the cache key, so replacing
     the file on disk refreshes the cached result instead of showing the old image.
     """
     img = Image.open(path)
@@ -74,10 +88,10 @@ def _to_data_uri(path: str, mtime: float, colorize: bool) -> str:
 
     buf = io.BytesIO()
     if colorize:
-        out.save(buf, format="PNG")  # lossless: exact class colors
+        out.save(buf, format="PNG")
         mime = "image/png"
     else:
-        out.save(buf, format="JPEG", quality=90)  # photos are much smaller as JPEG
+        out.save(buf, format="JPEG", quality=90)
         mime = "image/jpeg"
     return f"data:{mime};base64," + base64.b64encode(buf.getvalue()).decode()
 
@@ -93,16 +107,14 @@ def _preview_item(path: Path | None, caption: str, colorize: bool, missing: str)
 
 
 def load_preview_html() -> str:
-    """Return the HTML of the hero preview: input photo -> segmentation mask."""
-    photo = _preview_item(_find_input_image(), "Zdjęcie wejściowe", colorize=False, missing="Brak zdjęcia")
+    """Return the HTML of the preview: input photo -> segmentation mask."""
+    photo = _preview_item(PREVIEW_IMAGE_PATH, "Zdjęcie wejściowe", colorize=False, missing="Brak zdjęcia")
     mask = _preview_item(PREVIEW_MASK_PATH, "Wynik segmentacji", colorize=True, missing="Brak maski")
     return f'<div class="preview"><div class="pair">{photo}<div class="arrow">→</div>{mask}</div></div>'
 
 
 # ---------------------------------------------------------------------------
 # Global styles
-# Why: one stylesheet keeps the look consistent. Colors are semi-transparent so
-# the page works in both light and dark Streamlit themes.
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -248,7 +260,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Hero: text + button on the left, mask preview on the right
+# text + button on the left, mask preview on the right
 # ---------------------------------------------------------------------------
 left, right = st.columns([1.1, 1], gap="large", vertical_alignment="center")
 
@@ -258,8 +270,8 @@ with left:
 <div class="hero-title">Segmentacja semantyczna obrazów teledetekcyjnych</div>
 <div class="hero-text">
 Aplikacja do demonstracji modeli CNN i Transformer wytrenowanych na
-wysokorozdzielczych zdjęciach lotniczych i satelitarnych. Wybierz zdjęcie,
-modele i rozdzielczość, a następnie porównaj wyniki.
+zdjęciach lotniczych oraz satelitarnych. Wybierz zdjęcie,
+model i rozdzielczość, a następnie porównaj wyniki.
 </div>
 """, unsafe_allow_html=True)
     if st.button("Przejdź do segmentacji →", type="primary"):
@@ -269,7 +281,7 @@ with right:
     st.markdown(load_preview_html(), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Key numbers (model, dataset, class and resolution counts come from config so they stay in sync)
+# Key numbers (model, dataset, class and resolution counts come from config)
 # ---------------------------------------------------------------------------
 st.markdown(f"""
 <div class="stats">
@@ -281,23 +293,20 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Feature cards (single HTML block; no indentation, or Markdown treats it as code)
+# Feature cards
 # ---------------------------------------------------------------------------
 st.markdown("""
 <div class="section-title">Co możesz zrobić</div>
 <div class="cards">
 <div class="card">
-<div class="icon">🖼️</div>
 <div class="title">Wybierz zdjęcie</div>
 <div class="text">Przykłady z LandCover.ai lub BigEarthNet, własny plik JPG/PNG/TIF albo obszar pobrany z mapy Polski.</div>
 </div>
 <div class="card">
-<div class="icon">🤖</div>
 <div class="title">Wybierz model</div>
-<div class="text">UNet, DeepLabV3+ lub SegFormer. Jeden model albo kilka naraz, żeby porównać wyniki.</div>
+<div class="text">UNet, DeepLabV3+ lub SegFormer. Porównaj różne architektury.</div>
 </div>
 <div class="card">
-<div class="icon">🔍</div>
 <div class="title">Wybierz rozdzielczość</div>
 <div class="text">Od 25 cm/px do 10 m/px. Zobacz, jak pogorszenie rozdzielczości wpływa na jakość segmentacji.</div>
 </div>
@@ -322,6 +331,6 @@ st.markdown(
 st.markdown("""
 <div class="footer">
 <b>Zbiory danych:</b> LandCover.ai (25 cm/px, Polska) · BigEarthNet reBEN v2.0 (10 m/px, Europa)<br>
-<b>Modele:</b> UNet + ResNet34 · DeepLabV3+ + ResNet34 · SegFormer-B2 · UNet BigEarthNet · DeepLabV3+ BigEarthNet · SegFormer BigEarthNet
+<b>Modele:</b> UNet + ResNet34 · DeepLabV3+ + ResNet34 · SegFormer-B2
 </div>
 """, unsafe_allow_html=True)

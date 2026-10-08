@@ -176,12 +176,12 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
         return styles
 
     if best_class_by is not None and best_class_by in rounded and "Klasa" in df.columns:
-        st.dataframe(df.style.apply(mark_best_class, axis=None), use_container_width=True, hide_index=True)
+        st.dataframe(df.style.apply(mark_best_class, axis=None), width="stretch", hide_index=True)
     elif highlight_best and len(df) > 1:  # with a single row there is nothing to compare
         st.dataframe(df.style.apply(mark_best_per_column, subset=numeric_cols),
-                     use_container_width=True, hide_index=True)
+                     width="stretch", hide_index=True)
     else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 # --- WSPÓLNY RENDERER WIERSZA I PODSUMOWANIA (ELIMINACJA DUPLIKATÓW) ---

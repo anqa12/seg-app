@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import cv2
 import streamlit as st
-from scipy.special import softmax as scipy_softmax
 from utils.config import NUM_CLASSES
 
 
@@ -25,80 +24,81 @@ def _get_window(tile_size: int) -> np.ndarray:
     return _GAUSS_CACHE[tile_size]
 
 
-def rescale(img: np.ndarray, scale: float) -> np.ndarray:
+def _snap32(size: float) -> int:
+    """Round a side length to the NEAREST multiple of 32 (never below 32).
+
+    Why: UNet-like networks need sides divisible by 32. Rounding to the nearest value
+    changes the size as little as possible (floor + crop would throw part of the scene away).
     """
-    Rescale the image to the nearest multiple of 32 (UNet requirement)
-    without cropping valid terrain data.
+    return max(32, int(size / 32 + 0.5) * 32)
+
+
+def rescale(img: np.ndarray, scale: float) -> np.ndarray:
+    """Rescale the image by `scale` and snap each side to a multiple of 32 (UNet requirement).
+
+    What: one resize straight to the final size, so the WHOLE scene is kept.
+    Why not crop: cutting the image to a multiple of 32 removed part of the scene (e.g.
+    120 px -> 96 px) and then the ground-truth mask, which is resized as a whole, no
+    longer lined up with the prediction. Now both cover exactly the same area.
+    The price is a tiny stretch (at most MAX_STRETCH_FRACTION, see check_rescale).
     """
     H, W = img.shape[:2]
-    # Compute target dimensions snapped to the nearest multiple of 32
-    H_s = max(32, int(round((H * scale) / 32.0)) * 32)
-    W_s = max(32, int(round((W * scale) / 32.0)) * 32)
-
-    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
-    return cv2.resize(img, (W_s, H_s), interpolation=interp)
+    return cv2.resize(img, (_snap32(W * scale), _snap32(H * scale)), interpolation=cv2.INTER_AREA)
 
 
 # Smallest side (in px) the image may have after downscaling.
-# Why: rescale() forces every side up to at least 32 px. For a very small target
-# resolution that silently stretches the image into a different aspect ratio, and
-# the model would then segment a deformed picture. Below this limit we refuse instead.
+# Why: for a very small target resolution the image would be blown up to 32 px, which
+# stretches it into a different aspect ratio, and the model would then segment a deformed
+# picture. Below this limit we refuse instead.
 MIN_SIDE_PX = 32
 
-# Largest part of a side (0.10 = 10 %) that may be cut off when rescale() trims the
-# image down to a multiple of 32.
-# Why: for big images the trim is a few pixels, but for a small one it can remove a
-# large piece (51 px -> 32 px loses over a third), so the result would show only a
-# fragment of the original scene.
-# MAX_CROP_FRACTION = 0.10
+# Largest change of a side (0.10 = 10 %) allowed when it is snapped to a multiple of 32.
+# Why: a few percent of stretch is invisible (120 px -> 128 px is 6.7 %), but for small
+# images the snap can be large (51 px -> 64 px is 25 %) and would visibly deform the scene.
+MAX_STRETCH_FRACTION = 0.10
 
 
-def check_rescale(img_shape: tuple, scale: float, allow_upscale: bool = False) -> tuple[bool, str]:
-    """Check whether the target dimensions meet resolution constraints.
+def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
+    """Check whether the image can be rescaled by `scale` without being deformed.
 
-    Rejects upscaling (scale > 1.0) and downscaling below minimum side length.
+    What: computes the size the image would have (same formulas as rescale()) and rejects
+    the scale if the shorter side is below MIN_SIDE_PX, or if snapping the sides to a
+    multiple of 32 would stretch either side by more than MAX_STRETCH_FRACTION.
+    Returns (True, "") if it is fine, otherwise (False, reason in Polish for the UI).
+    Why a separate function: the app can warn and skip such a resolution BEFORE
+    running the model, instead of producing a meaningless prediction.
     """
-    # Blokada interpolacji w górę (np. 1 m/px -> 0.25 m/px to scale = 4.0)
-    if not allow_upscale and scale > 1.02:
-        return False, (
-            f"skala {scale:.1f}× oznacza próbę zwiększenia rozdzielczości "
-            f"powyżej jakości źródłowej, co jest zablokowane."
-        )
-
     H, W = img_shape[:2]
-    H_s, W_s = int(round(H * scale)), int(round(W * scale))
+    H_s, W_s = H * scale, W * scale
 
-    if min(H_s, W_s) < MIN_SIDE_PX:
+    if min(int(H_s), int(W_s)) < MIN_SIDE_PX:
         return False, (
-            f"po zmniejszeniu zdjęcie miałoby {W_s}×{H_s} px "
+            f"po zmniejszeniu zdjęcie miałoby {int(W_s)}×{int(H_s)} px "
             f"(minimum to {MIN_SIDE_PX} px na bok), więc zostałoby zdeformowane."
         )
 
+    # how much the sides change when snapped to a multiple of 32 (worst of the two)
+    stretch = max(abs(_snap32(H_s) / H_s - 1), abs(_snap32(W_s) / W_s - 1))
+    if stretch > MAX_STRETCH_FRACTION:
+        return False, (
+            f"po zmniejszeniu zdjęcie miałoby {int(W_s)}×{int(H_s)} px, a dopasowanie do "
+            f"wielokrotności 32 zniekształciłoby je o {stretch:.0%}."
+        )
     return True, ""
 
 
-def predict(
-        model: torch.nn.Module | None,
-        img_np: np.ndarray,
-        tile_size: int,
-        overlap: float = 0.5,
-        use_voting: bool = True,
-        progress_label: str = "",
-) -> np.ndarray | None:
-    """
-    Perform semantic segmentation prediction on a large image by splitting it
-    into smaller overlapping tiles and stitching the outputs back together.
-    """
-    if model is None:
-        return None
+def tile_layout(H: int, W: int, tile_size: int, overlap: float) -> tuple[int, list[int], list[int]]:
+    """Work out how predict() cuts an H x W image into tiles.
 
-    model.eval()
-    H, W = img_np.shape[:2]
-
+    What: returns (effective tile size, tile start rows, tile start columns). The tile
+    size is the wanted one, shrunk to the image if the image is smaller, and rounded
+    down to a multiple of 32. Tiles are placed `stride` pixels apart, the last one is
+    moved back so that it ends exactly at the image edge. tile size 0 = image too small.
+    Why a function: predict() and count_tiles() must always agree on this geometry.
+    """
     tile_size = (min(tile_size, H, W) // 32) * 32
     if tile_size <= 0:
-        st.warning(f"Zdjęcie ({W}×{H} px) za małe dla segmentacji.")
-        return None
+        return 0, [], []
 
     stride = max(1, int(tile_size * (1 - overlap)))
 
@@ -108,7 +108,50 @@ def predict(
             coords.append(max(0, length - tile_size))
         return coords
 
-    ys, xs = get_coords(H), get_coords(W)
+    return tile_size, get_coords(H), get_coords(W)
+
+
+def count_tiles(img_shape: tuple, scale: float, tile_size: int, overlap: float) -> int:
+    """How many tiles predict() would use for this image, scale, tile size and overlap.
+
+    What: takes the size rescale() would produce and then applies tile_layout().
+    1 means the image fits in a single tile, so tiling (overlap, voting) has no effect.
+    Why: lets the app show the tiling options only when they actually matter, and tell
+    the user roughly how many tiles will be computed.
+    """
+    H, W = img_shape[:2]
+    _, ys, xs = tile_layout(_snap32(H * scale), _snap32(W * scale), tile_size, overlap)
+    return len(ys) * len(xs)
+
+
+def predict(
+        model: torch.nn.Module | None,
+        img_np: np.ndarray,
+        tile_size: int,
+        overlap: float = 0.5,
+        use_voting: bool = True,
+        progress_label: str = "",
+        batch_size: int = 8,
+) -> np.ndarray | None:
+    """
+    Perform semantic segmentation prediction on a large image by splitting it
+    into smaller overlapping tiles and stitching the outputs back together.
+
+    Tiles go through the network in batches of `batch_size` instead of one by one.
+    Why: one big call is much faster than many small ones, especially on a GPU, and
+    the result is the same because every tile is still processed independently.
+    """
+    if model is None:
+        return None
+
+    model.eval()
+    H, W = img_np.shape[:2]
+
+    tile_size, ys, xs = tile_layout(H, W, tile_size, overlap)
+    if tile_size <= 0:
+        st.warning(f"Zdjęcie ({W}×{H} px) za małe dla segmentacji.")
+        return None
+
     total = len(ys) * len(xs)
 
     if total == 0:
@@ -127,36 +170,49 @@ def predict(
     bar = st.progress(0, text=progress_label or "Segmentuję…")
     done = 0
 
-    for y in ys:
-        for x in xs:
-            y_end = min(y + tile_size, H)
-            x_end = min(x + tile_size, W)
-            tile = img_np[y:y_end, x:x_end]
+    # all tile positions in reading order; processed batch_size at a time
+    coords = [(y, x) for y in ys for x in xs]
+
+    for start in range(0, total, batch_size):
+        batch = coords[start:start + batch_size]
+
+        # cut the tiles of this batch (edge tiles are padded up to the full tile size)
+        tiles = []
+        for y, x in batch:
+            tile = img_np[y:y + tile_size, x:x + tile_size]
 
             pad_h = tile_size - tile.shape[0]
             pad_w = tile_size - tile.shape[1]
             if pad_h > 0 or pad_w > 0:
                 tile = np.pad(tile, ((0, pad_h), (0, pad_w), (0, 0)), mode="reflect")
+            tiles.append(tile)
 
-            tensor = torch.from_numpy(tile).permute(2, 0, 1).float() / 255.0
-            tensor = tensor.unsqueeze(0).to(device)
+        # (B, H, W, 3) uint8  ->  (B, 3, H, W) float in 0..1, on the model's device
+        tensor = torch.from_numpy(np.stack(tiles)).permute(0, 3, 1, 2).float() / 255.0
+        tensor = tensor.to(device)
 
-            with torch.no_grad():
-                logits = model(tensor).squeeze(0).cpu().numpy()
+        # inference_mode = no_grad but even lighter (no gradient bookkeeping at all)
+        with torch.inference_mode():
+            logits = model(tensor)
+            # softmax / argmax are done on the same device (the GPU, if used) and only
+            # the small result is copied back, not the raw logits
+            out = torch.softmax(logits, dim=1) if use_voting else logits.argmax(dim=1)
+        out = out.cpu().numpy()  # (B, C, h, w) with voting, (B, h, w) without
 
+        for (y, x), res in zip(batch, out):
+            y_end = min(y + tile_size, H)
+            x_end = min(x + tile_size, W)
             h_real, w_real = y_end - y, x_end - x
 
             if not use_voting:
-                pred = logits.argmax(0)
-                pred_full[y:y_end, x:x_end] = pred[:h_real, :w_real]
+                pred_full[y:y_end, x:x_end] = res[:h_real, :w_real]
             else:
-                probs = scipy_softmax(logits, axis=0)
                 w_real_window = window[:h_real, :w_real]
-                votes[:, y:y_end, x:x_end] += probs[:, :h_real, :w_real] * w_real_window[np.newaxis]
+                votes[:, y:y_end, x:x_end] += res[:, :h_real, :w_real] * w_real_window[np.newaxis]
                 counts[y:y_end, x:x_end] += w_real_window
 
-            done += 1
-            bar.progress(done / total, text=f"{progress_label} {done}/{total} kafelków…")
+        done += len(batch)
+        bar.progress(done / total, text=f"{progress_label} {done}/{total} kafelków…")
 
     bar.empty()
 

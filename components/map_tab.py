@@ -7,6 +7,8 @@ import streamlit as st
 from PIL import Image
 
 import folium
+from branca.element import MacroElement
+from jinja2 import Template
 from streamlit_folium import st_folium
 from folium.plugins import Draw
 from pyproj import Transformer
@@ -16,34 +18,22 @@ from rasterio.transform import from_origin
 
 from utils.session import reset_image_state, set_native_resolution
 
+# ==========================================
+# KONFIGURACJA
+# ==========================================
 WMS_HIGH_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/HighResolution"
 WMS_STANDARD_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
-MAX_PX = 4096
-
+MAX_PX = 2500  # Bezpieczny limit dla Geoportalu
 POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 24.2}
 
 
-# Setup requests session with automatic retries for transient server errors
 @st.cache_resource(show_spinner=False)
 def _get_http_session():
-    """
-    Sesja requests z ponawianiem dla przejściowych błędów Geoportalu.
-
-    @st.cache_resource (zamiast zwykłej zmiennej globalnej) to idiomatyczny
-    sposób Streamlita na bezpieczne współdzielenie obiektów typu połączenie
-    sieciowe między kolejnymi przebiegami skryptu i wątkami sesji.
-
-    WAŻNE: timeout i liczba ponowień zostały świadomie ZMNIEJSZONE względem
-    poprzedniej wersji (był timeout=45s, total=3 -> worst-case ~6 MINUT przy
-    próbie High-Res + fallback do Standard). To była najpewniej przyczyna
-    wrażenia "długo myśli, potem błąd" — przeglądarka/ewentualny reverse
-    proxy najpewniej przerywały połączenie, zanim backend zdążył skończyć.
-    Nowe wartości: worst-case ok. 90s zamiast 6 minut.
-    """
+    """Zoptymalizowana sesja HTTP z mechanizmem ponawiania."""
     session = requests.Session()
     retries = Retry(
-        total=2,              # było 3
-        backoff_factor=0.5,   # było 1.0
+        total=2,
+        backoff_factor=0.5,
         status_forcelist=[429, 500, 502, 503, 504],
         raise_on_status=False
     )
@@ -52,11 +42,12 @@ def _get_http_session():
 
 
 HTTP_SESSION = _get_http_session()
-
 convert_to_2180_cache = None
 
 
-# caches value for conversion from EPSG:4326 to EPSG:2180
+# ==========================================
+# FUNKCJE POMOCNICZE WMS & GEO
+# ==========================================
 def _transformed():
     global convert_to_2180_cache
     if convert_to_2180_cache is None:
@@ -64,7 +55,6 @@ def _transformed():
     return convert_to_2180_cache
 
 
-# transforms selected region using cached value
 def _bbox_to_2180(lon_min, lat_min, lon_max, lat_max):
     t = _transformed()
     x_min, y_min = t.transform(lon_min, lat_min)
@@ -72,69 +62,50 @@ def _bbox_to_2180(lon_min, lat_min, lon_max, lat_max):
     return x_min, y_min, x_max, y_max
 
 
-# calculates pixel value for given resolution - takes into account MAX_PX
-def _calc_px(w_m, h_m, res_m: float):
+def _align_bbox_and_size(x_min, y_min, x_max, y_max, res_m: float):
+    """Wymusza idealną rozdzielczość siatki."""
+    w_m = x_max - x_min
+    h_m = y_max - y_min
     width = max(1, int(round(w_m / res_m)))
     height = max(1, int(round(h_m / res_m)))
-    if max(width, height) > MAX_PX:
-        scale = MAX_PX / max(width, height)
-        width = max(64, int(width * scale))
-        height = max(64, int(height * scale))
-    actual_res = ((w_m / width) + (h_m / height)) / 2.0
-    return width, height, actual_res
+    aligned_x_max = x_min + width * res_m
+    aligned_y_max = y_min + height * res_m
+    return aligned_x_max, aligned_y_max, width, height
 
 
-# downloads raster from WMS 1.1.1 from Geoportal
 def _fetch_wms_tiff(x_min, y_min, x_max, y_max, width, height, service_type="high"):
+    """Pobiera raster z 45-sekundowym timeoutem i fallbackiem do PNG."""
     url = WMS_HIGH_URL if service_type == "high" else WMS_STANDARD_URL
-
-    # round bbox to 2 decimal points
     bbox_str = f"{x_min:.2f},{y_min:.2f},{x_max:.2f},{y_max:.2f}"
 
-    params = {
-        "SERVICE": "WMS",
-        "VERSION": "1.1.1",
-        "REQUEST": "GetMap",
-        "LAYERS": "Raster",
-        "STYLES": "",
-        "SRS": "EPSG:2180",
-        "BBOX": bbox_str,
-        "WIDTH": str(int(width)),
-        "HEIGHT": str(int(height)),
-        "FORMAT": "image/tiff",
-        "TRANSPARENT": "false",
-    }
-
-    # required website User-Agent, in case of rejecting request (error 401/402/403)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "image/tiff,image/*,*/*",
+        "Accept": "image/tiff,image/png,image/*,*/*",
     }
 
-    try:
-        resp = HTTP_SESSION.get(url, params=params, headers=headers, timeout=15)
-        content_type = resp.headers.get("Content-Type", "")
+    # Pętla: najpierw próbujemy TIFF, jeśli serwer rzuci błędem - ratujemy się PNG
+    for fmt in ("image/tiff", "image/png"):
+        params = {
+            "SERVICE": "WMS", "VERSION": "1.1.1", "REQUEST": "GetMap",
+            "LAYERS": "Raster", "STYLES": "", "SRS": "EPSG:2180",
+            "BBOX": bbox_str, "WIDTH": str(int(width)), "HEIGHT": str(int(height)),
+            "FORMAT": fmt, "TRANSPARENT": "false",
+        }
 
-        # Geoportal may return HTTP 200 with an XML ServiceException payload instead of a TIFF
-        if "xml" in content_type.lower() or "html" in content_type.lower() or resp.content.startswith(b"<?xml"):
-            return None
+        try:
+            resp = HTTP_SESSION.get(url, params=params, headers=headers, timeout=45)
+            content_type = resp.headers.get("Content-Type", "").lower()
 
-        if resp.status_code != 200 or len(resp.content) < 1000:
-            return None
+            if "xml" in content_type or "html" in content_type or resp.content.startswith(b"<?xml"):
+                continue  # Błąd Geoportalu w formacie XML -> spróbuj formatu PNG
 
-        return resp.content
-    except requests.exceptions.Timeout:
-        st.warning("Przekroczono czas oczekiwania serwera. Zaznacz mniejszy obszar.")
-        return None
-    except requests.exceptions.ConnectionError:
-        st.warning(
-            "Serwer Geoportalu jest chwilowo niedostępny (błąd połączenia). "
-            "Spróbuj ponownie za chwilę — usługa bywa okresowo przeciążona."
-        )
-        return None
-    except Exception as e:
-        st.warning(f"Nieoczekiwany błąd podczas łączenia z Geoportalem: {e}")
-        return None
+            if resp.status_code == 200 and len(resp.content) > 1000:
+                return resp.content
+        except Exception as e:
+            print(f"[WMS {service_type} {fmt} Error]: {e}")
+            continue
+
+    return None
 
 
 def _is_blank_image(img_np, threshold=0.98):
@@ -148,52 +119,77 @@ def _is_blank_image(img_np, threshold=0.98):
     return False
 
 
-# adds metadata to the .tiff file
 def _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h):
     try:
         transform = from_origin(x_min, y_max, pixel_w, pixel_h)
         h, w = img_np.shape[:2]
         with rasterio.io.MemoryFile() as memfile:
             with memfile.open(driver="GTiff", height=h, width=w, count=3,
-                              dtype=img_np.dtype, crs="EPSG:2180",
-                              transform=transform) as ds:
+                              dtype=img_np.dtype, crs="EPSG:2180", transform=transform) as ds:
                 for band in range(3):
                     ds.write(img_np[:, :, band], band + 1)
             return memfile.read()
     except Exception as e:
-        st.caption(f"(Nie udało się dopisać georeferencji: {e})")
+        # ZWYKŁY PRINT - zapobiega błędowi wątków (missing ScriptRunContext)
+        print(f"[GeoTIFF Warning] Błąd zapisu: {e}")
         return None
 
 
-def render_map_tab():
-    """Main function for rendering map tab"""
+# ==========================================
+# WTYCZKA MAPY (AUTOMATYCZNE USUWANIE)
+# ==========================================
+class KeepOnlyLastDrawing(MacroElement):
+    """Błyskawicznie czyści mapę z poprzedniego kształtu, gdy tylko zaczniesz rysować nowy."""
+    _template = Template("""
+        {% macro script(this, kwargs) %}
+            var map = {{ this._parent.get_name() }};
+            // Usunięcie przy rozpoczęciu rysowania
+            map.on('draw:drawstart', function (e) {
+                map.eachLayer(function (layer) {
+                    if (layer instanceof L.Path || layer instanceof L.Polygon) {
+                        map.removeLayer(layer);
+                    }
+                });
+            });
+            // Dodatkowe zabezpieczenie po narysowaniu
+            map.on('draw:created', function (e) {
+                map.eachLayer(function (layer) {
+                    if ((layer instanceof L.Path || layer instanceof L.Polygon) && layer !== e.layer) {
+                        map.removeLayer(layer);
+                    }
+                });
+            });
+        {% endmacro %}
+    """)
 
+    def __init__(self):
+        super().__init__()
+        self._name = "KeepOnlyLastDrawing"
+
+
+# ==========================================
+# GŁÓWNY WIDOK STREAMLIT
+# ==========================================
+def render_map_tab():
     st.caption(
         "Narysuj prostokąt na mapie, wybierz tryb pobierania i kliknij **Pobierz**. "
         "Ortofotomapa Geoportalu dostępna jest wyłącznie dla Polski."
     )
 
-    # select option for downloading the data
     mode_options = {
         "Auto: Najpierw High-Res (10 cm), w razie braku Standard (25 cm)": "auto",
         "Tylko High-Res (10 cm/px — miasta/aglomeracje)": "force_high",
         "Tylko Standard (25 cm/px — szybciej, cała Polska)": "force_standard",
     }
-    selected_mode_label = st.radio(
-        "Jakość ortofotomapy:",
-        list(mode_options.keys()),
-        index=0,
-        horizontal=False
-    )
-    mode = mode_options[selected_mode_label]
+    mode = mode_options[st.radio("Jakość ortofotomapy:", list(mode_options.keys()))]
 
-    # Initialize map render key and bbox tracker in session state
+    # Inicjalizacja stanu
     if "map_key_id" not in st.session_state:
         st.session_state["map_key_id"] = 0
     if "current_bbox" not in st.session_state:
         st.session_state["current_bbox"] = None
 
-    # map
+    # Tworzenie mapy Folium
     m = folium.Map(
         location=[52.0, 19.5], zoom_start=6, min_zoom=5,
         tiles=None, max_bounds=True,
@@ -202,207 +198,171 @@ def render_map_tab():
     )
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Esri, Maxar, Earthstar Geographics",
-        name="Satelita", overlay=False, control=True,
-    ).add_to(m)
-    folium.TileLayer(tiles="OpenStreetMap", name="Mapa (OSM)",
-                     overlay=False, control=True).add_to(m)
-    folium.LayerControl(position="topright", collapsed=False).add_to(m)
+        attr="Esri", name="Satelita", overlay=False, control=True).add_to(m)
+    folium.TileLayer(tiles="OpenStreetMap", name="Mapa (OSM)", overlay=False, control=True).add_to(m)
+    folium.LayerControl(position="topright").add_to(m)
 
     Draw(
-        draw_options={
-            "rectangle": True, "polygon": False, "polyline": False,
-            "circle": False, "marker": False, "circlemarker": False,
-        },
+        draw_options={"rectangle": True, "polygon": False, "polyline": False, "circle": False, "marker": False,
+                      "circlemarker": False},
         edit_options={"edit": True, "remove": True},
     ).add_to(m)
+
+    KeepOnlyLastDrawing().add_to(m)  # Podłączenie automatycznego czyszczenia
 
     col_map, col_info = st.columns([3, 1])
 
     with col_map:
-        # Dynamic key recreates the map component when an old rectangle needs to be wiped
+        # Zwracamy tylko aktywne rysowanie (żeby mapa nie lagowała)
         map_data = st_folium(
-            m,
-            height=800,
-            use_container_width=True,
-            key=f"geoportal_map_{st.session_state['map_key_id']}"
+            m, height=750, width="stretch",
+            key=f"geoportal_map_{st.session_state['map_key_id']}",
+            returned_objects=["last_active_drawing"]
         )
 
-    # Detect new drawing and update bbox
+    # Detekcja narysowanego obszaru
     if map_data and map_data.get("last_active_drawing"):
         geom = map_data["last_active_drawing"].get("geometry", {})
         if geom.get("type") == "Polygon":
             coords = geom["coordinates"][0]
-            lons = [c[0] for c in coords]
-            lats = [c[1] for c in coords]
-            new_bbox = (min(lons), min(lats), max(lons), max(lats))
+            new_bbox = (min(c[0] for c in coords), min(c[1] for c in coords),
+                        max(c[0] for c in coords), max(c[1] for c in coords))
 
-            # Automatically clear old drawing when a new one is drawn
             if st.session_state["current_bbox"] != new_bbox:
                 st.session_state["current_bbox"] = new_bbox
-                if map_data.get("all_drawings") and len(map_data["all_drawings"]) > 1:
-                    st.session_state["map_key_id"] += 1
-                    st.rerun()
+                st.rerun()
 
     bbox_4326 = st.session_state.get("current_bbox")
 
+    # Panel boczny z informacjami i walidacją
     with col_info:
         st.markdown("#### Wybrany obszar")
+        can_download = False
 
-        # Guard against unselected area
         if bbox_4326 is None:
-            st.info("Narysuj prostokąt na mapie, aby odblokować przycisk pobierania.")
-            can_download = False
-            w_m, h_m = 0, 0
+            st.info("Narysuj prostokąt na mapie, aby pobrać.")
         else:
             lon_min, lat_min, lon_max, lat_max = bbox_4326
             x_min, y_min, x_max, y_max = _bbox_to_2180(lon_min, lat_min, lon_max, lat_max)
-            w_m = x_max - x_min
-            h_m = y_max - y_min
-
-            outside_poland = (
-                lon_max < POLAND_BOUNDS["min_lon"] or lon_min > POLAND_BOUNDS["max_lon"] or
-                lat_max < POLAND_BOUNDS["min_lat"] or lat_min > POLAND_BOUNDS["max_lat"]
-            )
+            w_m, h_m = x_max - x_min, y_max - y_min
+            area_ha = (w_m * h_m) / 10000.0
 
             st.write(f"**Wymiary:** {w_m / 1000:.2f} × {h_m / 1000:.2f} km")
-            st.caption(f"Powierzchnia: ~{(w_m * h_m) / 10000:.1f} ha")
+            st.caption(f"Powierzchnia: **{area_ha:.1f} ha**")
 
+            # Dynamiczne limity
+            max_side_m = 5000.0 if mode == "force_standard" else 2000.0
+            max_area_ha = 2500.0 if mode == "force_standard" else 400.0
+
+            outside_poland = (lon_max < POLAND_BOUNDS["min_lon"] or lon_min > POLAND_BOUNDS["max_lon"] or
+                              lat_max < POLAND_BOUNDS["min_lat"] or lat_min > POLAND_BOUNDS["max_lat"])
+
+            # Ścisła walidacja
             if outside_poland:
                 st.error("Zaznaczony obszar leży poza Polską.")
-                can_download = False
             elif w_m < 50 or h_m < 50:
                 st.warning("Obszar jest zbyt mały (< 50 m).")
-                can_download = False
-            elif w_m > 15000 or h_m > 15000:
-                st.warning("Obszar jest zbyt duży (> 15 km). Zmniejsz zaznaczenie.")
-                can_download = False
+            elif w_m > max_side_m or h_m > max_side_m:
+                st.error(f"Zbyt duży bok! Limit to **{max_side_m / 1000:.1f} km**.")
+            elif area_ha > max_area_ha:
+                st.error(f"Zbyt duża powierzchnia! Limit to **{max_area_ha:.0f} ha**.")
             else:
                 can_download = True
 
-            # Manual button to reset selection and clean the map
+                # Podgląd końcowego obrazu
+                target_res_preview = 0.25 if mode == "force_standard" else 0.10
+                _, _, est_w, est_h = _align_bbox_and_size(x_min, y_min, x_max, y_max, target_res_preview)
+                st.caption(f"Rozdzielczość: **{target_res_preview:.2f} m/px** ({int(target_res_preview * 100)} cm/px)")
+                st.caption(f"Wymiary obrazu: **{est_w} × {est_h} px**")
+
             if st.button("❌ Wyczyść zaznaczenie", width="stretch"):
                 st.session_state["current_bbox"] = None
                 st.session_state["map_key_id"] += 1
                 st.rerun()
 
         st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-        download_clicked = st.button(
-            "⬇️ Pobierz ortofotomapę (.tiff)",
-            type="primary",
-            width="stretch",
-            disabled=not can_download
-        )
+        download_clicked = st.button("⬇️ Pobierz ortofotomapę (.tiff)", type="primary", width="stretch",
+                                     disabled=not can_download)
 
-    # Process download request
+    # Akcja pobierania
     if download_clicked and can_download and bbox_4326:
         progress = st.progress(0, text="Łączenie z usługą Geoportalu…")
-        img_np = None
-        used_layer_name = ""
-        actual_res = None
+        img_np, used_layer_name, final_res, final_y_max = None, "", None, y_max
 
-        # high resolution
+        # KROK 1: HighResolution
         if mode in ("auto", "force_high"):
-            progress.progress(20, text="Sprawdzanie HighResolution (10 cm/px)… (może potrwać do ~45s)")
-            w_high, h_high, res_high = _calc_px(w_m, h_m, res_m=0.10)
-            raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, w_high, h_high, service_type="high")
+            progress.progress(20, text="Pobieranie High-Res (10 cm/px). To może zająć do 45 sekund…")
+            cur_x_max, cur_y_max, w_px, h_px = _align_bbox_and_size(x_min, y_min, x_max, y_max, 0.10)
+            raw_bytes = _fetch_wms_tiff(x_min, y_min, cur_x_max, cur_y_max, w_px, h_px, "high")
 
             if raw_bytes:
                 try:
-                    img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-                    temp_np = np.array(img_pil)
+                    temp_np = np.array(Image.open(io.BytesIO(raw_bytes)).convert("RGB"))
                     if not _is_blank_image(temp_np):
-                        img_np = temp_np
-                        used_layer_name = "HighResolution (~10 cm/px)"
-                        actual_res = res_high
+                        img_np, used_layer_name, final_res, final_y_max = temp_np, "HighResolution", 0.10, cur_y_max
                 except Exception:
                     pass
 
-        # standard resolution (if high resolution fails or if selected option was so)
+        # KROK 2: StandardResolution (Fallback lub wymuszony)
         if img_np is None:
             if mode == "force_high":
                 progress.empty()
-                st.error("Brak ortofotomapy HighResolution dla tego obszaru. Zmień tryb na Auto lub Standard.")
-                return
-            else:
-                if mode == "auto":
-                    st.info("Brak pokrycia 10 cm/px. Automatyczne przełączenie na warstwę standardową (25 cm/px)...")
+                st.error("Brak ortofotomapy HighResolution dla tego obszaru.")
+                st.stop()
 
-                progress.progress(20, text="Pobieranie StandardResolution (25 cm/px)…")
-                w_std, h_std, res_std = _calc_px(w_m, h_m, res_m=0.25)
-                raw_bytes = _fetch_wms_tiff(x_min, y_min, x_max, y_max, w_std, h_std, service_type="standard")
+            if mode == "auto":
+                st.info("Brak pokrycia 10 cm/px. Pobieram warstwę 25 cm/px...")
 
-                if raw_bytes:
-                    try:
-                        img_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-                        temp_np = np.array(img_pil)
-                        if not _is_blank_image(temp_np):
-                            img_np = temp_np
-                            used_layer_name = "StandardResolution (~25-50 cm/px)"
-                            actual_res = res_std
-                    except Exception as e:
-                        st.error(f"Błąd odczytu obrazu: {e}")
+            progress.progress(40, text="Pobieranie Standard (25 cm/px)…")
+            cur_x_max, cur_y_max, w_px, h_px = _align_bbox_and_size(x_min, y_min, x_max, y_max, 0.25)
+            raw_bytes = _fetch_wms_tiff(x_min, y_min, cur_x_max, cur_y_max, w_px, h_px, "standard")
 
-        # save and summarize
+            if raw_bytes:
+                try:
+                    temp_np = np.array(Image.open(io.BytesIO(raw_bytes)).convert("RGB"))
+                    if not _is_blank_image(temp_np):
+                        img_np, used_layer_name, final_res, final_y_max = temp_np, "StandardResolution", 0.25, cur_y_max
+                except Exception:
+                    pass
+
+        # KROK 3: Finalizacja
         if img_np is None:
             progress.empty()
-            st.error("Nie udało się pobrać zdjęcia (obszar poza zasięgiem lub błąd serwera).")
+            st.error("Nie udało się pobrać zdjęcia z Geoportalu (brak danych lub przeciążenie serwera).")
         else:
-            progress.progress(85, text="Przygotowywanie GeoTIFF…")
-            real_h, real_w = img_np.shape[:2]
-            pixel_w = w_m / real_w
-            pixel_h = h_m / real_h
-            actual_res = (pixel_w + pixel_h) / 2.0
-
-            geo_bytes = _to_georeferenced_tiff(img_np, x_min, y_max, pixel_w, pixel_h)
+            progress.progress(85, text="Zapisywanie GeoTIFF…")
+            geo_bytes = _to_georeferenced_tiff(img_np, x_min, final_y_max, final_res, final_res)
             save_bytes = geo_bytes if geo_bytes is not None else raw_bytes
 
             reset_image_state()
-            st.session_state["img_np"] = img_np
-            st.session_state["img_source"] = "map"
-            st.session_state["source_res"] = round(actual_res, 4)
-            native_label = set_native_resolution(actual_res)
-            st.session_state["_map_native_label"] = native_label
-
-            st.session_state["_map_img_np"] = img_np
-            st.session_state["_map_raw_bytes"] = save_bytes
-            st.session_state["_map_actual_res"] = actual_res
-            st.session_state["_map_caption"] = (
-                f"Ortofotomapa Geoportalu — {used_layer_name} ({actual_res:.2f} m/px)"
-            )
-            st.session_state["_map_filename"] = (
-                f"ortofoto_{lat_min:.2f}_{lon_min:.2f}_{actual_res:.2f}mpx.tiff"
-            )
-            progress.progress(100, text="Pobrano!")
+            st.session_state.update({
+                "img_np": img_np,
+                "img_source": "map",
+                "source_res": final_res,
+                "_map_native_label": set_native_resolution(final_res),
+                "_map_img_np": img_np,
+                "_map_raw_bytes": save_bytes,
+                "_map_actual_res": final_res,
+                "_map_caption": f"Ortofotomapa — {used_layer_name} ({final_res:.2f} m/px)",
+                "_map_filename": f"ortofoto_{lat_min:.2f}_{lon_min:.2f}_{final_res:.2f}mpx.tiff"
+            })
             progress.empty()
             st.rerun()
 
-    # preview and save on disk button
+    # Podgląd po pobraniu
     if st.session_state.get("_map_img_np") is not None:
         st.markdown("---")
         st.success(
-            f"Pobrano ortofotomapę: "
-            f"{st.session_state['_map_img_np'].shape[1]} × {st.session_state['_map_img_np'].shape[0]} px, "
-            f"rozdzielczość terenowa: **{st.session_state['_map_actual_res']:.2f} m/px**"
-        )
+            f"Pobrano: {st.session_state['_map_img_np'].shape[1]} × {st.session_state['_map_img_np'].shape[0]} px, rozdzielczość: **{st.session_state['_map_actual_res']:.2f} m/px**")
         c_prev, c_act = st.columns([1, 1])
         with c_prev:
-            st.image(
-                st.session_state["_map_img_np"],
-                caption=st.session_state["_map_caption"],
-                width="stretch",
-            )
+            st.image(st.session_state["_map_img_np"], caption=st.session_state["_map_caption"],
+                     width="stretch")
         with c_act:
-            st.download_button(
-                label="💾 Zapisz plik .tiff",
-                data=st.session_state["_map_raw_bytes"],
-                file_name=st.session_state["_map_filename"],
-                mime="image/tiff",
-                width="stretch",
-            )
+            st.download_button("💾 Zapisz plik .tiff", data=st.session_state["_map_raw_bytes"],
+                               file_name=st.session_state["_map_filename"], mime="image/tiff", width="stretch")
             if st.button("🗑️ Usuń pobraną ortofotomapę", width="stretch"):
-                for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
-                          "_map_caption", "_map_filename"):
+                for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res", "_map_caption", "_map_filename"):
                     st.session_state.pop(k, None)
                 reset_image_state()
                 st.rerun()
