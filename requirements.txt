@@ -12,3 +12,4 @@ streamlit-folium
 scipy~=1.17.1
 folium
 pyproj
+pytest

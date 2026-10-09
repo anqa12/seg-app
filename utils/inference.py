@@ -50,6 +50,13 @@ def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
     """
     Check whether the image can be rescaled by `scale` without being deformed.
     """
+
+    if scale > 1.05:
+        return False, (
+            f"skala {scale:.2f}× oznacza próbę zwiększenia rozdzielczości "
+            f"powyżej jakości źródłowej, co jest zablokowane."
+        )
+
     H, W = img_shape[:2]
     H_s, W_s = H * scale, W * scale
 
