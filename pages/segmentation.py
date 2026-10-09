@@ -31,8 +31,12 @@ _DATASET_DEFAULT_RES = {
 }
 
 
-# chooses the right base model for LC and BEN datasets
 def _default_models_for(dataset_type: str | None) -> list[str]:
+    """
+    Choose the right base model for LC and BEN datasets
+    :param dataset_type:
+    :return: list of available model names
+    """
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
     if LANDCOVER_MODELS:
@@ -40,17 +44,28 @@ def _default_models_for(dataset_type: str | None) -> list[str]:
     return [list(MODELS.keys())[0]]
 
 
-# how much the source image has to be scaled to reach the chosen resolution
-# (moved up from the results section: it is also needed to filter the resolutions below)
 def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
+    """
+    how much the source image has to be scaled to reach the chosen resolution
+    :param res_label:
+    :param source_resolution_m:
+    :return: float
+    """
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
 
 
-# how many tiles each selected model x resolution combination would be cut into
-# (1 = the image fits in a single tile, so overlap and voting change nothing)
 def _tile_counts(img_shape: tuple, models: list[str], resolutions: list[str],
                  source_resolution_m: float, overlap_value: float) -> list[int]:
+    """
+    how many tiles each selected model or resolution needs to be cut into
+    :param img_shape:
+    :param models:
+    :param resolutions:
+    :param source_resolution_m:
+    :param overlap_value:
+    :return: list[int] counts
+    """
     counts = []
     for model_name in models:
         for res_label in resolutions:
@@ -60,13 +75,13 @@ def _tile_counts(img_shape: tuple, models: list[str], resolutions: list[str],
     return counts
 
 
-# session state
+# Session state
 if "source_res" not in st.session_state: st.session_state["source_res"] = 0.25
 if "img_np" not in st.session_state: st.session_state["img_np"] = None
 if "mask_gt" not in st.session_state: st.session_state["mask_gt"] = None
 if "resolutions" not in st.session_state: st.session_state["resolutions"] = dict(RESOLUTIONS)
 
-# choose image
+# Choose image
 st.subheader("Wybierz zdjęcie")
 
 tab_sample, tab_map, tab_upload = st.tabs([
@@ -137,7 +152,7 @@ with active_container:
 
     col_m, col_r, col_v = st.columns([2, 2, 1])
 
-    # choose model
+    # Choose model(s)
     with col_m:
         st.markdown("**Model / Modele**")
         st.caption("Wybierz jeden lub wiele do porównania")
@@ -159,7 +174,7 @@ with active_container:
                     f"trenowane na zbiorze **{chosen_dataset_type}** — wyniki mogą być słabe."
                 )
 
-    # choose resolution(s)
+    # Choose resolution(s)
     with col_r:
         st.markdown("**Rozdzielczość / Rozdzielczości**")
         st.caption("Wybierz jedną lub więcej do porównania")
@@ -177,31 +192,27 @@ with active_container:
     with col_v:
         st.markdown("**Zaawansowane**")
         if max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, 0.0), default=1) > 1:
-            with st.expander("⚙️ Kafelkowanie", expanded=False):
-                # default 0.25 = about half as many tiles as 0.5, so noticeably faster;
-                # step 0.05 so that the default sits exactly on the slider grid
+            with st.expander("⚙️ Podział na mniejsze fragmenty", expanded=False):
                 overlap = st.slider(
-                    "Nakładanie się kafelków:", 0.0, 0.5, 0.25, 0.05,
-                    help="Większe = gładsze granice między kafelkami, ale dłuższe liczenie. "
+                    "Nakładanie się wycinków:", 0.0, 0.5, 0.25, 0.05,
+                    help="Większe = gładsze granice między wycinkami, ale dłuższe liczenie. "
                          "0 = najszybciej, 0.5 = najgładziej.",
                 )
-                # with no overlap there is (almost) nothing to blend, so the option is greyed out
                 use_voting = st.checkbox(
-                    "Łączenie kafelków (Gaussian voting)",
+                    "Łączenie wycinków (Gaussian voting)",
                     value=True,
                     disabled=(overlap == 0),
-                    help="Łączy wyniki z nakładających się kafelków (im bliżej brzegu kafelka, "
-                         "tym mniejsza waga), żeby nie było widać szwów. "
+                    help="Łączy wyniki z nakładających się wycinków (im bliżej brzegu wycinka, "
+                         "tym mniejsza waga). "
                          "Przy nakładaniu 0 nieaktywne.",
                 )
                 n_tiles = max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, overlap))
-                st.caption(f"Przy tych ustawieniach: do {n_tiles} kafelków na zdjęcie.")
+                st.caption(f"Przy tych ustawieniach: do {n_tiles} wycinków na zdjęcie.")
         else:
-            st.caption("Zdjęcie mieści się w jednym kafelku modelu, więc kafelkowanie nie jest potrzebne.")
+            st.caption("Zdjęcie mieści się w rozmiarze wejściowym modelu, więc podział na mniejsze fragmenty nie jest potrzebny.")
 
     # skip resolutions this image cannot be downscaled to without being deformed
-    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image) - warn instead of
-    # running the model on a distorted picture
+    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image)
     unavailable = {}
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))

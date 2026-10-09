@@ -8,7 +8,7 @@ from utils.display import load_mask_from_path
 from utils.session import reset_image_state
 
 
-def render_sample_tab():
+def render_sample_tab() -> None:
     """
     Main function to render the sample tab (samples from landcover and bigearthnet datasets)
     """
@@ -36,7 +36,7 @@ def render_sample_tab():
                     if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
                                  width="stretch"):
 
-                        # full reset of the img state, after choosing new img
+                        # Full reset of the img state, after choosing new img
                         reset_image_state()
                         st.session_state["chosen"] = name
                         st.session_state["chosen_ds"] = dataset_name

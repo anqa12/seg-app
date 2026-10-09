@@ -12,8 +12,6 @@ from rasterio.plot import reshape_as_image
 from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX, NUM_CLASSES, OVERLAY_ALPHA
 
 
-# --- I/O & TRANSFORMS ---
-
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
     """Load an image from an uploaded Streamlit file object."""
     name = uploaded_file.name.lower()
@@ -49,6 +47,9 @@ def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | No
 
 
 def load_mask_from_path(path: str) -> np.ndarray | None:
+    """
+    Loads a mask from a given path.
+    """
     try:
         m = np.array(Image.open(path))
         return (m[:, :, 0] if m.ndim == 3 else m).astype(np.uint8)
@@ -58,15 +59,24 @@ def load_mask_from_path(path: str) -> np.ndarray | None:
 
 
 def mask_to_rgb(mask: np.ndarray) -> np.ndarray:
+    """
+    Converts a mask to RGB.
+    """
     return CLASS_COLORS[mask]
 
 
 def overlay(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """
+    Overlays pred mask with an image.
+    """
     h, w = mask.shape
     return ((1 - OVERLAY_ALPHA) * img[:h, :w] + OVERLAY_ALPHA * CLASS_COLORS[mask]).astype(np.uint8)
 
 
 def class_percentages(mask: np.ndarray) -> dict:
+    """
+    Calculates class percentages.
+    """
     total = mask.size
     if total == 0:
         return {cls: 0.0 for cls in CLASSES}
@@ -76,6 +86,9 @@ def class_percentages(mask: np.ndarray) -> dict:
 # --- METRICS & BASE RENDERING ---
 
 def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
+    """
+    Computes metrics (IOU, F1) when mask is given.
+    """
     iou = np.full(NUM_CLASSES, np.nan, dtype=np.float64)
     f1 = np.full(NUM_CLASSES, np.nan, dtype=np.float64)
 
@@ -94,6 +107,9 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
 
 
 def render_legend() -> None:
+    """
+    Renders the legend with corresponding colors of each class.
+    """
     items = "".join(
         f'<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:13px">'
         f'<span style="width:13px;height:13px;border-radius:3px;background:{CLASS_HEX[i]};border:1px solid rgba(0,0,0,.2)"></span>'
@@ -104,6 +120,9 @@ def render_legend() -> None:
 
 
 def render_coverage_tiles(mask: np.ndarray) -> None:
+    """
+    Renders coverage tiles with percentage result of each class.
+    """
     pct = class_percentages(mask)
     items = list(pct.items())
 
@@ -138,18 +157,8 @@ _BEST_STYLE = "background-color: rgba(46,160,67,0.22); color: #2EA043; font-weig
 
 
 def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best_class_by: str | None = None) -> None:
-    """Show a metrics table.
-
-    highlight_best: in every metric column the best (highest) value is shown in green,
-    all other cells stay plain. Used when rows are alternatives (models, resolutions).
-
-    best_class_by: name of a metric column (e.g. "IoU"). The class (row) with the best
-    value in that column is highlighted: its name and that value. Used for the per-class
-    table, where rows are classes. The background class and summary rows whose name
-    starts with "—" (the average) do not take part.
-
-    Why numbers are compared rounded to 2 decimals: that is exactly what the table
-    displays, so a green cell is always visibly the best one (equal-looking values tie).
+    """Show a metrics table. Highlights best result - in every metric column the best (highest) value is shown in green,
+    all other cells stay plain. Used when rows are alternatives (models, resolutions)
     """
     df = pd.DataFrame(metrics)
     numeric_cols = [c for c in df.columns if c not in ("Klasa", "Rozdzielczość", "Model")]
@@ -158,16 +167,15 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
     for c in numeric_cols:
         df[c] = df[c].apply(lambda x: "—" if pd.isna(x) else f"{float(x):.2f}")
 
+    # marks best metric
     def mark_best_per_column(col):
         vals = rounded[col.name]
         best = vals.max()
         return [_BEST_STYLE if (pd.notna(v) and v == best) else "" for v in vals]
 
+    # marks highest score (excluding background)
     def mark_best_class(data):
         styles = pd.DataFrame("", index=data.index, columns=data.columns)
-        # The background class (CLASSES[0]) does not compete: it is the "everything else"
-        # class and usually the easiest one, so it would win almost every time and the
-        # highlight would say nothing. Its row is still shown, just never highlighted.
         is_class_row = ~df["Klasa"].astype(str).str.startswith("—")
         is_eligible = is_class_row & (df["Klasa"] != CLASSES[0])
         vals = rounded[best_class_by].where(is_eligible)
@@ -184,10 +192,7 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
         st.dataframe(df, width="stretch", hide_index=True)
 
 
-# --- WSPÓLNY RENDERER WIERSZA I PODSUMOWANIA (ELIMINACJA DUPLIKATÓW) ---
-
 # How many predictions are placed side by side before the grid wraps to a new row.
-# Why: with more columns the images get too small to compare by eye.
 MAX_PRED_COLS = 3
 
 # One column of the comparison grid: (label, input image, predicted mask)
@@ -227,16 +232,8 @@ def _fit_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
 
 
 def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = None) -> str:
-    """Small square tiles with the share of each class, for one mask.
-
-    What: one square tile per class (same look as the old tiles, just smaller).
-    The tiles are laid out 3 + 2 (the bottom two centered), so the same class is
-    in the same place under every prediction and you compare by position.
-    If ref_pct (Ground Truth percentages) is given, each tile also shows the
-    difference to it in percentage points.
-    Why container units (cqw): the text scales with the width of the tile grid, so it
-    fits both in narrow columns (many predictions) and in wide ones. The fixed px
-    sizes before it are the fallback for browsers that do not know cqw.
+    """
+    Small square tiles with the share of each class, for one mask.
     """
     pct = class_percentages(mask)
     head = (
@@ -271,9 +268,7 @@ def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = No
             f'<div style="font-size:15px;font-size:7cqw;font-weight:700;line-height:1.1">{val:.1f}%</div>'
             f'{delta}</div>'
         )
-    # max-width keeps the tiles from getting huge when the column is wide
-    # Flex + wrap: three tiles per row; the last row (2 tiles) is centered, not pushed left.
-    # Every tile has the same fixed width (a third of the row), so positions stay predictable.
+
     grid = (
         '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;width:100%;'
         'max-width:300px;margin:0 auto;container-type:inline-size">' + "".join(tiles) + "</div>"
@@ -288,10 +283,8 @@ def _render_image_row(
         n_cols: int,
         as_overlay: bool,
 ) -> None:
-    """One row of images: Original | (Ground Truth) | prediction 1 | prediction 2 ...
-
-    What: shows either the plain masks or the masks blended over the original.
-    The original is always the first column so the eye has a fixed reference.
+    """
+    Renders one row of images: Original | (Ground Truth) | prediction 1 | prediction 2 ...
     """
     cols = _make_columns(n_cols)
     cols[0].image(ref_img, caption="Oryginał", width="stretch")
@@ -308,12 +301,8 @@ def _render_image_row(
 
 
 def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_cols: int) -> None:
-    """Coverage tiles placed directly under the images, column by column.
-
-    What: the tiles of Ground Truth and of every prediction sit under their own image.
-    The first column (under the original) only holds the section title.
-    Why: same positions + same size everywhere = you compare coverage by looking
-    from one column to the next.
+    """
+    Coverage tiles placed directly under the images, column by column.
     """
     cols = _make_columns(n_cols)
     cols[0].markdown("**Pokrycie terenu**")
@@ -331,22 +320,17 @@ def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_co
 
 
 def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> None:
-    """Shared renderer for all views: a comparison grid.
+    """
+    Shared renderer for all views: a comparison grid.
 
     items: list of (label, input image, predicted mask). One item = a single result,
     several items = a comparison of models or resolutions.
-
-    What: for every group of up to MAX_PRED_COLS predictions it draws a row of images
-    (tabs: Maska / Nakładka) and the coverage tiles directly under it.
-    Why tabs and not a radio button: the page resets 'seg_running' at the end of the
-    script, so any widget that triggers a rerun would wipe the results. Tabs switch
-    in the browser and do not rerun anything.
     """
     h, w = items[0][2].shape
     ref_img = items[0][1][:h, :w]  # shared "Oryginał" column
     gt_fit = _fit_mask(mask_gt, (h, w)) if mask_gt is not None else None
 
-    n_ref = 2 if mask_gt is not None else 1  # Original (+ Ground Truth)
+    n_ref = 2 if mask_gt is not None else 1  # original + gt
     slots = min(len(items), MAX_PRED_COLS)
     # Always the same number of columns, so images keep the same width in every group
     n_cols = n_ref + slots
@@ -367,12 +351,14 @@ def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> No
 
         _render_coverage_row(chunk, mask_gt, n_cols)
 
-    # extra space between the coverage tiles and whatever follows (the metrics tables)
+    # extra space between the coverage tiles
     st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
 
 
 def _render_summary_table(group_col_name: str, items: list[tuple[str, np.ndarray]], mask_gt: np.ndarray) -> None:
-    """Tworzy tabelę mIoU / mF1 porównującą predykcje z GT."""
+    """
+    Creates table with MIoU and mF1 metrics comparing predictions with GT
+    """
     with st.expander(f"Metryki per {group_col_name.lower()}", expanded=True):
         rows = []
         for label, mask in items:
@@ -387,16 +373,19 @@ def _render_summary_table(group_col_name: str, items: list[tuple[str, np.ndarray
         render_metrics_table(rows, highlight_best=True)
 
 
-# --- GŁÓWNE WIDOKI DLA APLIKACJI ---
-
 def render_result_block(img_input: np.ndarray, mask: np.ndarray, label: str = "") -> None:
+    """
+    Renders whole result block.
+    """
     if label: st.caption(label)
     render_legend()
     _render_grid([("Predykcja", img_input, mask)], mask_gt=None)
 
 
 def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray, label: str = "") -> None:
-    """Pojedyncza predykcja obok Ground Truth, z pokryciem terenu i metrykami per klasa."""
+    """
+    Single predictions with coverage tiles and metrics comparing GT and predictions per class.
+    """
     h, w = mask_pred.shape
     mask_gt = _fit_mask(mask_gt, (h, w))
 
@@ -417,6 +406,9 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
 
 
 def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None = None) -> None:
+    """
+    Compares predictions with different resolutions. Mean IoU and F1 metrics are available.
+    """
     if not results: return
     render_legend()
     # Each column is labelled with the resolution and the size of the rescaled image
@@ -431,6 +423,9 @@ def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None
 
 
 def render_model_comparison(img_input: np.ndarray, model_results: dict, mask_gt: np.ndarray | None = None) -> None:
+    """
+    Compares predictions with different models. Mean IoU and F1 metrics are available.
+    """
     render_legend()
     # All models ran on the same input, so every column shares img_input
     items = [(name, img_input, mask) for name, mask in model_results.items()]

@@ -25,48 +25,30 @@ def _get_window(tile_size: int) -> np.ndarray:
 
 
 def _snap32(size: float) -> int:
-    """Round a side length to the NEAREST multiple of 32 (never below 32).
-
-    Why: UNet-like networks need sides divisible by 32. Rounding to the nearest value
-    changes the size as little as possible (floor + crop would throw part of the scene away).
+    """
+    Round a side length to the NEAREST multiple of 32 (never below 32).
     """
     return max(32, int(size / 32 + 0.5) * 32)
 
 
 def rescale(img: np.ndarray, scale: float) -> np.ndarray:
-    """Rescale the image by `scale` and snap each side to a multiple of 32 (UNet requirement).
-
-    What: one resize straight to the final size, so the WHOLE scene is kept.
-    Why not crop: cutting the image to a multiple of 32 removed part of the scene (e.g.
-    120 px -> 96 px) and then the ground-truth mask, which is resized as a whole, no
-    longer lined up with the prediction. Now both cover exactly the same area.
-    The price is a tiny stretch (at most MAX_STRETCH_FRACTION, see check_rescale).
+    """
+    Rescale the image by `scale` and snap each side to a multiple of 32 (UNet requirement).
     """
     H, W = img.shape[:2]
     return cv2.resize(img, (_snap32(W * scale), _snap32(H * scale)), interpolation=cv2.INTER_AREA)
 
 
 # Smallest side (in px) the image may have after downscaling.
-# Why: for a very small target resolution the image would be blown up to 32 px, which
-# stretches it into a different aspect ratio, and the model would then segment a deformed
-# picture. Below this limit we refuse instead.
 MIN_SIDE_PX = 32
 
 # Largest change of a side (0.10 = 10 %) allowed when it is snapped to a multiple of 32.
-# Why: a few percent of stretch is invisible (120 px -> 128 px is 6.7 %), but for small
-# images the snap can be large (51 px -> 64 px is 25 %) and would visibly deform the scene.
 MAX_STRETCH_FRACTION = 0.10
 
 
 def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
-    """Check whether the image can be rescaled by `scale` without being deformed.
-
-    What: computes the size the image would have (same formulas as rescale()) and rejects
-    the scale if the shorter side is below MIN_SIDE_PX, or if snapping the sides to a
-    multiple of 32 would stretch either side by more than MAX_STRETCH_FRACTION.
-    Returns (True, "") if it is fine, otherwise (False, reason in Polish for the UI).
-    Why a separate function: the app can warn and skip such a resolution BEFORE
-    running the model, instead of producing a meaningless prediction.
+    """
+    Check whether the image can be rescaled by `scale` without being deformed.
     """
     H, W = img_shape[:2]
     H_s, W_s = H * scale, W * scale
@@ -88,13 +70,8 @@ def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
 
 
 def tile_layout(H: int, W: int, tile_size: int, overlap: float) -> tuple[int, list[int], list[int]]:
-    """Work out how predict() cuts an H x W image into tiles.
-
-    What: returns (effective tile size, tile start rows, tile start columns). The tile
-    size is the wanted one, shrunk to the image if the image is smaller, and rounded
-    down to a multiple of 32. Tiles are placed `stride` pixels apart, the last one is
-    moved back so that it ends exactly at the image edge. tile size 0 = image too small.
-    Why a function: predict() and count_tiles() must always agree on this geometry.
+    """
+    Work out how predict() cuts an H x W image into tiles.
     """
     tile_size = (min(tile_size, H, W) // 32) * 32
     if tile_size <= 0:
@@ -112,12 +89,8 @@ def tile_layout(H: int, W: int, tile_size: int, overlap: float) -> tuple[int, li
 
 
 def count_tiles(img_shape: tuple, scale: float, tile_size: int, overlap: float) -> int:
-    """How many tiles predict() would use for this image, scale, tile size and overlap.
-
-    What: takes the size rescale() would produce and then applies tile_layout().
-    1 means the image fits in a single tile, so tiling (overlap, voting) has no effect.
-    Why: lets the app show the tiling options only when they actually matter, and tell
-    the user roughly how many tiles will be computed.
+    """
+    How many tiles predict() would use for this image, scale, tile size and overlap.
     """
     H, W = img_shape[:2]
     _, ys, xs = tile_layout(_snap32(H * scale), _snap32(W * scale), tile_size, overlap)

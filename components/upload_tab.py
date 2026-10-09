@@ -4,25 +4,34 @@ from utils.display import load_image_from_upload
 from utils.session import reset_image_state, set_native_resolution
 
 
-# Clears previously uploaded file and resets the state
-def _clear_upload():
-
+def _clear_upload() -> None:
+    """Clear the uploaded file, reset session keys, and refresh the file uploader widget."""
     if st.session_state.get("img_source") == "upload":
         reset_image_state()
-    st.session_state.pop("_upload_img_np", None)
-    st.session_state.pop("_upload_raw_name", None)
-    st.session_state.pop("_upload_detected_res", None)
-    st.session_state.pop("_upload_processed_file_id", None)
+
+    keys_to_clear = [
+        "_upload_img_np",
+        "_upload_raw_name",
+        "_upload_detected_res",
+        "_upload_processed_file_id",
+        "_upload_manual_res",
+        "_upload_native_label",
+        "upload_manual_res_input",
+    ]
+    for key in keys_to_clear:
+        st.session_state.pop(key, None)
+
+    # Increment key to completely reset the st.file_uploader widget
     st.session_state["_upload_widget_key"] = st.session_state.get("_upload_widget_key", 0) + 1
 
 
-def render_upload_tab():
+def render_upload_tab() -> None:
     """
     Main function to render the upload tab (component for uploading user's own images (JPG/PNG/TIFF)
-    detects resolution from metadata or asks the user to provide this information when it is missing)
+    Detects resolution from metadata or asks the user to provide this information when it is missing)
     """
 
-    # upload your own image + detect resolution from the metadata (if available)
+    # Upload your own image + detect resolution from the metadata (if available)
     widget_key = f"upload_file_{st.session_state.get('_upload_widget_key', 0)}"
     uploaded = st.file_uploader(
         "Wgraj zdjęcie (JPG, PNG, TIF):",
@@ -33,7 +42,7 @@ def render_upload_tab():
     if uploaded is not None:
         file_id = getattr(uploaded, "file_id", None) or f"{uploaded.name}_{uploaded.size}"
 
-        # process the file iff new one was uploaded
+        # Process the file iff new one was uploaded
         if st.session_state.get("_upload_processed_file_id") != file_id:
             img_np, detected_res = load_image_from_upload(uploaded)
             if img_np is not None:
@@ -50,10 +59,10 @@ def render_upload_tab():
                     st.session_state["_upload_native_label"] = native_label
                 else:
 
-                    # if no metadata, specify source_res
+                    # If no metadata, specify source_res
                     st.session_state["source_res"] = None
 
-    # preview
+    # Preview
     if st.session_state.get("_upload_img_np") is not None:
         img_np = st.session_state["_upload_img_np"]
         detected_res = st.session_state.get("_upload_detected_res")
@@ -73,7 +82,7 @@ def render_upload_tab():
                 st.warning("Nie wykryto rozdzielczości z metadanych.")
                 st.markdown("**Podaj rozdzielczość źródłową (m/px):**")
 
-                # manual resolution
+                # Manual resolution
                 manual_str = st.text_input(
                     "Rozdzielczość (m/px)",
                     value=str(st.session_state.get("_upload_manual_res", "")),

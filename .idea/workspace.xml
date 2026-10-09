@@ -5,12 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="20f39156-6435-44e2-8009-10ca6058d267" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/assets/preview_img.jpg" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/preview_mask.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/preview.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/components/map_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/components/map_tab.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/sample_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/components/sample_tab.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/upload_tab.py" beforeDir="false" afterPath="$PROJECT_DIR$/components/upload_tab.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/segmentation.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/display.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/display.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/inference.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/inference.py" afterDir="false" />

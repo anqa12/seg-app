@@ -40,7 +40,7 @@ def _warm_up_imports() -> bool:
 _warm_up_imports()
 
 
-# sample image and corresponding mask
+# Sample image and corresponding mask
 PREVIEW_MASK_PATH: Path = Path("assets/preview_mask.png")
 PREVIEW_IMAGE_PATH: Path = Path("assets/preview_img.jpg")
 
@@ -113,9 +113,7 @@ def load_preview_html() -> str:
     return f'<div class="preview"><div class="pair">{photo}<div class="arrow">→</div>{mask}</div></div>'
 
 
-# ---------------------------------------------------------------------------
 # Global styles
-# ---------------------------------------------------------------------------
 st.markdown("""
 <style>
 /* Hide Streamlit's default chrome */
@@ -259,9 +257,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
 # text + button on the left, mask preview on the right
-# ---------------------------------------------------------------------------
 left, right = st.columns([1.1, 1], gap="large", vertical_alignment="center")
 
 with left:
@@ -280,9 +276,7 @@ model i rozdzielczość, a następnie porównaj wyniki.
 with right:
     st.markdown(load_preview_html(), unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
 # Key numbers (model, dataset, class and resolution counts come from config)
-# ---------------------------------------------------------------------------
 st.markdown(f"""
 <div class="stats">
 <div class="stat"><div class="num">{len(MODELS)}</div><div class="label">modeli do porównania</div></div>
@@ -292,9 +286,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
 # Feature cards
-# ---------------------------------------------------------------------------
 st.markdown("""
 <div class="section-title">Co możesz zrobić</div>
 <div class="cards">
@@ -313,9 +305,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
 # Segmentation classes
-# ---------------------------------------------------------------------------
 chips = "".join(
     f'<span class="chip"><span class="dot" style="background:{CLASS_HEX[i]}"></span>{name}</span>'
     for i, name in enumerate(CLASSES)
@@ -325,9 +315,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------------------------
 # Footer
-# ---------------------------------------------------------------------------
 st.markdown("""
 <div class="footer">
 <b>Zbiory danych:</b> LandCover.ai (25 cm/px, Polska) · BigEarthNet reBEN v2.0 (10 m/px, Europa)<br>
