@@ -10,7 +10,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 import folium
-from folium.plugins import Draw
+from folium.plugins import Draw, Geocoder
 from pyproj import Transformer
 from streamlit_folium import st_folium
 
@@ -24,21 +24,24 @@ WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardReso
 RES_M = 0.25  # standard res 25 cm/px
 MAX_PX = 4096  # max pxl to avoid wms errors
 HTTP_TIMEOUT = (5, 60)  # (connect, read) in seconds
+# Geoportal sometimes answers 404/5xx for a request that works a moment later.
+# Such answers are retried after these pauses (seconds): 5 attempts in total, ~13 s of waiting.
+RETRY_PAUSES = (1.0, 2.0, 4.0, 6.0)
+TRANSIENT_STATUSES = (404, 429, 500, 502, 503, 504)
 POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 24.2}  # Poland bounds for displaying
 
 
 def _get_http_session() -> requests.Session:
     """
     Create and configure a requests.Session with automated retry logic.
-    Handles temporary 5xx gateway errors and rate-limiting responses from national servers.
+    Only connection problems are retried here. Temporary HTTP errors (404, 429, 5xx) are
+    retried in _fetch_wms instead, so that every new attempt can use a brand new connection.
     """
     session = requests.Session()
     retries = Retry(
-        connect=2,
+        connect=1,
         read=False,
-        status=2,
         backoff_factor=1.0,
-        status_forcelist=[404, 429, 502, 503, 504],
         raise_on_status=False,
     )
     session.mount("https://", HTTPAdapter(max_retries=retries))
@@ -84,13 +87,15 @@ def _calc_image_size(w_m: float, h_m: float) -> tuple[int, int]:
 # WMS
 # ==========================================
 def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
-               on_progress=None) -> tuple[bytes | None, str | None]:
+               on_progress=None, on_status=None) -> tuple[bytes | None, str | None]:
     """
     Query the Geoportal WMS GetMap service to retrieve aerial orthoimagery for a given metric BBOX.
     Iterates through image formats (JPEG, PNG, TIFF) as fallback strategies and reports progress.
     Returns (raw_bytes, None) on success or (None, error_message) on failure.
+
+    Temporary errors (404/429/5xx, connection problems) are retried after growing pauses
+    (RETRY_PAUSES), and on_status(text) tells the UI what is going on during the wait.
     """
-    session = _get_http_session()
     bbox_str = f"{x_min:.2f},{y_min:.2f},{x_max:.2f},{y_max:.2f}"
 
     # Custom headers are required; bare requests User-Agents are blocked by the government firewall (WAF)
@@ -103,38 +108,38 @@ def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
         "Accept": "image/jpeg,image/png,image/tiff,image/*,*/*",
     }
 
-    MAX_RETRIES = 3
     for fmt in ("image/jpeg", "image/png", "image/tiff"):
-        for attempt in range(MAX_RETRIES):
-            params = {
-                "SERVICE": "WMS", "VERSION": "1.1.1", "REQUEST": "GetMap",
-                "LAYERS": "Raster", "STYLES": "", "SRS": "EPSG:2180",
-                "BBOX": bbox_str,
-                "WIDTH": str(int(width)), "HEIGHT": str(int(height)),
-                "FORMAT": fmt, "TRANSPARENT": "false",
-            }
+        params = {
+            "SERVICE": "WMS", "VERSION": "1.1.1", "REQUEST": "GetMap",
+            "LAYERS": "Raster", "STYLES": "", "SRS": "EPSG:2180",
+            "BBOX": bbox_str,
+            "WIDTH": str(int(width)), "HEIGHT": str(int(height)),
+            "FORMAT": fmt, "TRANSPARENT": "false",
+        }
+        last_problem = None  # last temporary problem, used for the final message
+
+        for attempt, pause in enumerate((0.0,) + RETRY_PAUSES):
+            if pause:
+                if on_status:
+                    on_status(f"Geoportal chwilowo nie odpowiada ({last_problem}). "
+                              f"Ponawiam, próba {attempt + 1} z {len(RETRY_PAUSES) + 1}…")
+                time.sleep(pause)
+
+            # A NEW session (= a new connection) for every attempt. A kept-alive connection
+            # may stay tied to the same, currently failing, server behind Geoportal's gateway,
+            # while a new connection can be served by another one.
+            session = _get_http_session()
             try:
                 with session.get(WMS_URL, params=params, headers=headers,
                                  timeout=HTTP_TIMEOUT, stream=True) as resp:
                     ct = resp.headers.get("Content-Type", "").lower()
 
-                    if resp.status_code == 404:
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(1.0)
-                            continue  # spróbuj ponownie
-                        return None, (
-                            "Geoportal nie znalazł danych dla tego obszaru (błąd HTTP 404). "
-                            "Spróbuj przesunąć lub zmniejszyć zaznaczony prostokąt."
-                        )
-
-                    if resp.status_code in (429, 500, 502, 503, 504):
-                        if attempt < MAX_RETRIES - 1:
-                            time.sleep(1.5)
-                            continue
-                        return None, (
-                            f"Geoportal jest przeciążony (błąd HTTP {resp.status_code}). "
-                            "Spróbuj ponownie za chwilę."
-                        )
+                    if resp.status_code in TRANSIENT_STATUSES:
+                        last_problem = f"HTTP {resp.status_code}"
+                        # visible in the terminal, to see what Geoportal really answers
+                        print(f"[WMS] {fmt}, attempt {attempt + 1}: HTTP {resp.status_code}, "
+                              f"body: {resp.content[:150]!r}")
+                        continue
 
                     # Geoportal often returns HTTP 200 with an XML ServiceException payload on internal failure
                     if "xml" in ct or "html" in ct:
@@ -166,15 +171,30 @@ def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
                     "Zaznacz mniejszy obszar lub spróbuj za chwilę."
                 )
             except requests.exceptions.ConnectionError:
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(1.0)
-                    continue
+                last_problem = "błąd połączenia"
+                continue
+            except Exception as e:
+                return None, f"Nieoczekiwany błąd: {e}"
+            finally:
+                session.close()
+
+        else:
+            # all attempts were used up on temporary errors (the format is not the cause,
+            # so there is no point in trying the next one)
+            if last_problem == "HTTP 404":
+                return None, (
+                    "Geoportal wielokrotnie zwrócił błąd 404 (brak danych albo chwilowa awaria po "
+                    "jego stronie). Spróbuj za chwilę albo lekko przesuń zaznaczony prostokąt."
+                )
+            if last_problem == "błąd połączenia":
                 return None, (
                     "Serwer Geoportalu jest chwilowo niedostępny. "
                     "Spróbuj ponownie za chwilę."
                 )
-            except Exception as e:
-                return None, f"Nieoczekiwany błąd: {e}"
+            return None, (
+                f"Geoportal jest przeciążony ({last_problem}). "
+                "Spróbuj ponownie za chwilę."
+            )
 
     return None, "Geoportal nie zwrócił obrazu (brak ortofotomapy dla tego obszaru)."
 
@@ -267,6 +287,14 @@ def render_map_tab() -> None:
         edit_options={"edit": True, "remove": True},
     ).add_to(m)
 
+    # Search Bar for address
+    Geocoder(
+        collapsed=True,
+        position="topleft",
+        placeholder="Szukaj adresu lub miejscowości...",
+        add_marker=True,
+    ).add_to(m)
+
     col_map, col_info = st.columns([3, 1], gap="medium")
 
     with col_map:
@@ -330,12 +358,12 @@ def render_map_tab() -> None:
                 st.caption(f"Powierzchnia: **{(w_m * h_m) / 10_000:.1f} ha**")
 
                 if outside:
-                    st.error("❌ Obszar poza Polską.")
+                    st.error("Obszar poza Polską.")
                 elif w_m < 50 or h_m < 50:
-                    st.warning("⚠️ Obszar zbyt mały (< 50 m).")
+                    st.warning("⚠Obszar zbyt mały (< 50 m).")
                 elif w_m > max_side_m or h_m > max_side_m:
                     st.error(
-                        f"❌ Obszar zbyt duży! Limit to **{max_side_m:.0f} m** na bok "
+                        f"Obszar zbyt duży! Limit to **{max_side_m:.0f} m** na bok "
                         f"({MAX_PX} px przy 25 cm/px). Zmniejsz zaznaczenie."
                     )
                 else:
@@ -367,8 +395,11 @@ def render_map_tab() -> None:
             else:
                 progress.progress(30, text=f"Pobieranie {received/1e6:.1f} MB")
 
+        def _on_status(message: str) -> None:
+            progress.progress(15, text=message)
+
         progress.progress(15, text="Pobieranie ortofotomapy standardowej (25 cm/px)")
-        raw_bytes, error = _fetch_wms(x_min, y_min, x_max, y_max, w_px, h_px, _on_progress)
+        raw_bytes, error = _fetch_wms(x_min, y_min, x_max, y_max, w_px, h_px, _on_progress, _on_status)
 
         if raw_bytes is None:
             progress.empty()

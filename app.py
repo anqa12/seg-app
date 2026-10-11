@@ -1,7 +1,5 @@
 import base64
-import importlib
 import io
-import threading
 from pathlib import Path
 
 import numpy as np
@@ -16,28 +14,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-
-@st.cache_resource(show_spinner=False)
-def _warm_up_imports() -> bool:
-    """Import the heavy libraries in the background while the home page is shown."""
-
-    def _work() -> None:
-        for name in (
-                "torch", "segmentation_models_pytorch", "cv2", "rasterio", "pandas",
-                "utils.models", "utils.inference", "utils.display",
-                "components.sample_tab", "components.upload_tab", "components.map_tab",
-        ):
-            try:
-                importlib.import_module(name)
-            except Exception:
-                pass
-
-    threading.Thread(target=_work, daemon=True).start()
-    return True
-
-
-_warm_up_imports()
 
 
 # Sample image and corresponding mask
