@@ -3,6 +3,8 @@ import streamlit as st
 from utils.display import load_image_from_upload
 from utils.session import reset_image_state, set_native_resolution
 
+PREVIEW_WIDTH = 400
+
 
 def _clear_upload() -> None:
     """Clear the uploaded file, reset session keys, and refresh the file uploader widget."""
@@ -73,7 +75,7 @@ def render_upload_tab() -> None:
                 img_np,
                 caption=f"{st.session_state.get('_upload_raw_name', '')} — "
                         f"{img_np.shape[1]}×{img_np.shape[0]} px",
-                width='stretch',
+                width=PREVIEW_WIDTH,
             )
         with c_info:
             if detected_res:

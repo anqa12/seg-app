@@ -7,6 +7,8 @@ from utils.config import SAMPLE_IMAGES
 from utils.display import load_mask_from_path
 from utils.session import reset_image_state
 
+PREVIEW_WIDTH = 400
+
 
 def render_sample_tab() -> None:
     """
@@ -19,13 +21,14 @@ def render_sample_tab() -> None:
         with inner_tab:
             samples = SAMPLE_IMAGES[dataset_name]
             st.caption(f"Zdjęcia testowe ze zbioru **{dataset_name}**")
-            cols = st.columns(len(samples))
+            cols = st.columns(max(len(samples), 4))
 
             for col, (name, info) in zip(cols, samples.items()):
                 img_path = info["img"]
                 with col:
                     if os.path.exists(img_path):
-                        st.image(img_path, width="stretch")
+                        thumb = Image.open(img_path).convert("RGB").resize((256, 256), Image.NEAREST)
+                        st.image(thumb, use_container_width=True)
                     else:
                         st.markdown(
                             '<div style="height:100px;background:rgba(128,128,128,0.08);'

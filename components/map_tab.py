@@ -466,7 +466,7 @@ def render_map_tab() -> None:
                 data=st.session_state["_map_raw_bytes"],
                 file_name=st.session_state["_map_filename"],
                 mime="image/tiff",
-                width="stretch",
+                width=400,
             )
             if st.button("🗑️ Usuń pobraną ortofotomapę", width="stretch"):
                 for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",

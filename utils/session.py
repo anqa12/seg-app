@@ -19,6 +19,7 @@ _RESET_KEYS: list[str] = [
     "_upload_detected_res",
     "_upload_native_label",
     "seg_running",   # clears the "segmentation running" state on image change
+    "seg_results",
 ]
 
 

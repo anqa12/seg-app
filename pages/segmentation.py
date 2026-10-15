@@ -106,7 +106,7 @@ _TAB_CONTAINERS = {"sample": tab_sample, "map": tab_map, "upload": tab_upload}
 active_container = _TAB_CONTAINERS.get(img_source)
 
 if img_np is None or active_container is None:
-    st.info("Wybierz zdjęcie testowe lub wgraj własne, aby przejść dalej.")
+    st.info("Wybierz zdjęcie, aby przejść dalej.")
     st.stop()
 
 with active_container:
@@ -154,8 +154,8 @@ with active_container:
 
     # Choose model(s)
     with col_m:
-        st.markdown("**Model / Modele**")
-        st.caption("Wybierz jeden lub wiele do porównania")
+        st.markdown("**Model**")
+        st.caption("Wybierz jeden lub kilka do porównania")
         selected_models = st.multiselect(
             "Modele", list(MODELS.keys()),
             default=_default_models_for(chosen_dataset_type),
@@ -176,8 +176,8 @@ with active_container:
 
     # Choose resolution(s)
     with col_r:
-        st.markdown("**Rozdzielczość / Rozdzielczości**")
-        st.caption("Wybierz jedną lub więcej do porównania")
+        st.markdown("**Rozdzielczość**")
+        st.caption("Wybierz jedną lub kilka do porównania")
         selected_res = st.multiselect(
             "Rozdzielczości", available_resolutions,
             default=default_res,
@@ -192,22 +192,13 @@ with active_container:
     with col_v:
         st.markdown("**Zaawansowane**")
         if max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, 0.0), default=1) > 1:
-            with st.expander("⚙️ Podział na mniejsze fragmenty", expanded=False):
+            with st.expander("⚙️ Podział zdjęcia", expanded=False):
                 overlap = st.slider(
                     "Nakładanie się wycinków:", 0.0, 0.5, 0.25, 0.05,
-                    help="Większe = gładsze granice między wycinkami, ale dłuższe liczenie. "
-                         "0 = najszybciej, 0.5 = najgładziej.",
+                    help="Większe = gładsze granice między wycinkami, ale dłuższa detekcja. "
+                         "0 = najszybciej, 0.5 = najwolniej, ale dokładniej.",
                 )
-                use_voting = st.checkbox(
-                    "Łączenie wycinków (Gaussian voting)",
-                    value=True,
-                    disabled=(overlap == 0),
-                    help="Łączy wyniki z nakładających się wycinków (im bliżej brzegu wycinka, "
-                         "tym mniejsza waga). "
-                         "Przy nakładaniu 0 nieaktywne.",
-                )
-                n_tiles = max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, overlap))
-                st.caption(f"Przy tych ustawieniach: do {n_tiles} wycinków na zdjęcie.")
+                use_voting = overlap > 0
         else:
             st.caption("Zdjęcie mieści się w rozmiarze wejściowym modelu, więc podział na mniejsze fragmenty nie jest potrzebny.")
 
