@@ -1,12 +1,15 @@
 import streamlit as st
 import os
 import sys
+import io
+from PIL import Image
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS
+from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS, TILE_OVERLAP, USE_GAUSSIAN_VOTING
 from utils.models import load_model
-from utils.inference import rescale, predict, check_rescale, count_tiles
+from utils.inference import rescale, predict, check_rescale
 from utils.display import (render_result_block, render_resolution_comparison,
                            render_model_comparison, render_gt_comparison)
 from components.sample_tab import render_sample_tab
@@ -53,26 +56,6 @@ def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     """
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
-
-
-def _tile_counts(img_shape: tuple, models: list[str], resolutions: list[str],
-                 source_resolution_m: float, overlap_value: float) -> list[int]:
-    """
-    how many tiles each selected model or resolution needs to be cut into
-    :param img_shape:
-    :param models:
-    :param resolutions:
-    :param source_resolution_m:
-    :param overlap_value:
-    :return: list[int] counts
-    """
-    counts = []
-    for model_name in models:
-        for res_label in resolutions:
-            scale = calculate_actual_scale(res_label, source_resolution_m)
-            if check_rescale(img_shape, scale)[0]:  # skip resolutions that will be rejected anyway
-                counts.append(count_tiles(img_shape, scale, MODELS[model_name]["tile"], overlap_value))
-    return counts
 
 
 # Session state
@@ -150,7 +133,7 @@ with active_container:
     if manual_label:
         default_res = [manual_label]
 
-    col_m, col_r, col_v = st.columns([2, 2, 1])
+    col_m, col_r = st.columns(2)
 
     # Choose model(s)
     with col_m:
@@ -184,23 +167,6 @@ with active_container:
             label_visibility="collapsed",
             key=f"selected_res_{st.session_state.get('selection_gen', 0)}"
         )
-
-    # advanced settings - gaussian blending
-    # The panel is shown only when the image really gets cut into tiles (large photos from
-    # the map or uploads). Ready-made test images fit in one tile, so there is nothing to set.
-    overlap, use_voting = 0.25, True  # used when the panel is hidden
-    with col_v:
-        st.markdown("**Zaawansowane**")
-        if max(_tile_counts(img_np.shape, selected_models, selected_res, source_res, 0.0), default=1) > 1:
-            with st.expander("⚙️ Podział zdjęcia", expanded=False):
-                overlap = st.slider(
-                    "Nakładanie się wycinków:", 0.0, 0.5, 0.25, 0.05,
-                    help="Większe = gładsze granice między wycinkami, ale dłuższa detekcja. "
-                         "0 = najszybciej, 0.5 = najwolniej, ale dokładniej.",
-                )
-                use_voting = overlap > 0
-        else:
-            st.caption("Zdjęcie mieści się w rozmiarze wejściowym modelu, więc podział na mniejsze fragmenty nie jest potrzebny.")
 
     # skip resolutions this image cannot be downscaled to without being deformed
     # (e.g. a small 25 cm/px crop cannot become a 10 m/px image)
@@ -236,110 +202,139 @@ with active_container:
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
+    # Clear old results if parameters change
+    current_params = f"{selected_models}_{selected_res}"
+    if st.session_state.get("last_params") != current_params:
+        st.session_state.pop("seg_results", None)
+        st.session_state["last_params"] = current_params
+
+    # Start button logic
     if st.button("Uruchom segmentację", type="primary", width="stretch"):
         st.session_state["seg_running"] = True
+        st.session_state.pop("seg_results", None)
 
     running = st.session_state.get("seg_running", False)
 
-    if running:
-        if st.button("Zatrzymaj", width="stretch"):
-            st.session_state["seg_running"] = False
-            st.warning("Segmentacja została zatrzymana przez użytkownika.")
-            st.stop()
+    # Placeholder for the Stop button (only visible during execution)
+    stop_button_placeholder = st.empty()
 
-    if not running:
+    if running and "seg_results" not in st.session_state:
+        with stop_button_placeholder:
+            if st.button("Zatrzymaj", width="stretch"):
+                st.session_state["seg_running"] = False
+                st.warning("Segmentacja została zatrzymana przez użytkownika.")
+                st.stop()
+
+    # Stop execution if not running and no results available
+    if not running and "seg_results" not in st.session_state:
         st.stop()
 
-    # one model, one or more resolutions
-    if n_m == 1 and n_r >= 1:
-        model_name = selected_models[0]
-        is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
+    # ==========================================
+    # 1. INFERENCE EXECUTION
+    # ==========================================
+    if "seg_results" not in st.session_state:
 
-        with st.spinner(f"Ładowanie modelu {model_name}…"):
-            model = load_model(model_name)
-            tile_size = MODELS[model_name]["tile"]
-            model_overlap = MODELS[model_name].get("overlap", overlap)
-            model_voting = MODELS[model_name].get("use_voting", use_voting)
+        # one model, one or more resolutions
+        if n_m == 1 and n_r >= 1:
+            model_name = selected_models[0]
 
-        if model is None:
-            st.stop()
+            with st.spinner(f"Ładowanie modelu {model_name}…"):
+                model = load_model(model_name)
+                tile_size = MODELS[model_name]["tile"]
+                model_overlap = MODELS[model_name].get("overlap", TILE_OVERLAP)
+                model_voting = MODELS[model_name].get("use_voting", USE_GAUSSIAN_VOTING)
 
-        results = []
-        for res_label in selected_res:
+            if model is None:
+                st.stop()
+
+            results = []
+            for res_label in selected_res:
+                actual_scale = calculate_actual_scale(res_label, source_res)
+
+                if actual_scale > 1.5:
+                    st.caption(
+                        f"{res_label}: powiększenie {actual_scale:.1f}× "
+                        f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
+                    )
+
+                # rescale & predict
+                img_s = rescale(img_np, actual_scale)
+                mask = predict(
+                    model, img_s,
+                    tile_size=tile_size,
+                    overlap=model_overlap,
+                    use_voting=model_voting,
+                    progress_label=f"[{res_label}]",
+                )
+                if mask is not None:
+                    results.append({"label": res_label, "img": img_s, "mask": mask})
+
+            if not results:
+                st.stop()
+
+            # Save results to session state
+            st.session_state["seg_results"] = {"type": "res_compare", "model": model_name, "data": results}
+
+        # more models, one resolution
+        elif n_r == 1 and n_m > 1:
+            res_label = selected_res[0]
             actual_scale = calculate_actual_scale(res_label, source_res)
 
             if actual_scale > 1.5:
-                st.caption(
-                    f"{res_label}: powiększenie {actual_scale:.1f}× "
-                    f"(zdjęcie źródłowe ma niższą rozdzielczość) — jakość może być słaba."
+                st.caption(f"{res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
+
+            model_results = {}
+            for model_name in selected_models:
+                ts = MODELS[model_name]["tile"]
+                model_overlap = MODELS[model_name].get("overlap", TILE_OVERLAP)
+                model_voting = MODELS[model_name].get("use_voting", USE_GAUSSIAN_VOTING)
+
+                with st.spinner(f"Ładowanie {model_name}…"):
+                    model = load_model(model_name)
+                if model is None:
+                    continue
+
+                # rescale & predict
+                img_s = rescale(img_np, actual_scale)
+                mask = predict(
+                    model, img_s,
+                    tile_size=ts,
+                    overlap=model_overlap,
+                    use_voting=model_voting,
+                    progress_label=f"[{model_name}]"
                 )
+                if mask is not None:
+                    model_results[model_name] = mask
 
-            # rescale & predict
-            img_s = rescale(img_np, actual_scale)
-            mask = predict(
-                model, img_s,
-                tile_size=tile_size,
-                overlap=model_overlap,
-                use_voting=model_voting,
-                progress_label=f"[{res_label}]",
-            )
-            if mask is None:
-                continue
+            if model_results:
+                img_input = rescale(img_np, actual_scale)
+                # Save results to session state
+                st.session_state["seg_results"] = {"type": "model_compare", "img_input": img_input,
+                                                   "data": model_results}
 
-            results.append({"label": res_label, "img": img_s, "mask": mask})
+        # Clear running flag and remove the stop button immediately after inference
+        st.session_state["seg_running"] = False
+        stop_button_placeholder.empty()
 
-        if not results:
-            st.stop()
+    # ==========================================
+    # 2. RENDERING RESULTS & EXPORT
+    # ==========================================
+    if "seg_results" in st.session_state:
+        res = st.session_state["seg_results"]
 
-        if n_r == 1:
-            r = results[0]
-            if mask_gt is not None:
-                render_gt_comparison(
-                    r["img"], r["mask"], mask_gt,
-                    label=f"{model_name} · {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px"
-                )
+        # --- Display Results ---
+        if res["type"] == "res_compare":
+            data = res["data"]
+            model_name = res["model"]
+            if len(data) == 1:
+                r = data[0]
+                label = f"{model_name} · {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px"
+                if mask_gt is not None:
+                    render_gt_comparison(r["img"], r["mask"], mask_gt, label=label)
+                else:
+                    render_result_block(r["img"], r["mask"], label=label)
             else:
-                render_result_block(
-                    r["img"], r["mask"],
-                    label=f"{model_name} · {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px"
-                )
-        else:
-            render_resolution_comparison(results, mask_gt=mask_gt)
+                render_resolution_comparison(data, mask_gt=mask_gt)
 
-    # more models, one resolution
-    elif n_r == 1 and n_m > 1:
-        res_label = selected_res[0]
-        actual_scale = calculate_actual_scale(res_label, source_res)
-
-        if actual_scale > 1.5:
-            st.caption(f"{res_label}: powiększenie {actual_scale:.1f}× — jakość może być słaba.")
-
-        model_results = {}
-        for model_name in selected_models:
-            ts = MODELS[model_name]["tile"]
-            model_overlap = MODELS[model_name].get("overlap", overlap)
-            model_voting = MODELS[model_name].get("use_voting", use_voting)
-            is_sat = "bigearthnet" in model_name.lower() or "ben" in model_name.lower()
-
-            with st.spinner(f"Ładowanie {model_name}…"):
-                model = load_model(model_name)
-            if model is None:
-                continue
-
-            # rescale & predict
-            img_s = rescale(img_np, actual_scale)
-            mask = predict(
-                model, img_s,
-                tile_size=ts,
-                overlap=model_overlap,
-                use_voting=model_voting,
-                progress_label=f"[{model_name}]"
-            )
-            if mask is not None:
-                model_results[model_name] = mask
-
-        if model_results:
-            img_input = rescale(img_np, actual_scale)
-            render_model_comparison(img_input, model_results, mask_gt=mask_gt)
-
-    st.session_state["seg_running"] = False
+        elif res["type"] == "model_compare":
+            render_model_comparison(res["img_input"], res["data"], mask_gt=mask_gt)

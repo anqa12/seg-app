@@ -249,7 +249,7 @@ def render_map_tab() -> None:
     st.caption(
         "Narysuj prostokąt na mapie i kliknij **Pobierz**. "
         "Ortofotomapa standardowa (25 cm/px) pokrywa całą Polskę. "
-        "Maksymalny obszar: ok. **625 m × 625 m** (2500 × 2500 px)."
+        "Maksymalny obszar: ok. **1024 m × 1024 m** (4096 × 4096 px)."
     )
 
     if "map_key_id" not in st.session_state:
@@ -420,7 +420,7 @@ def render_map_tab() -> None:
                     "Sprawdź czy zaznaczony obszar leży w Polsce i spróbuj ponownie."
                 )
                 with st.expander("Podgląd (diagnostyka)"):
-                    st.image(img_np, width=400)
+                    st.image(img_np, width=600)
             else:
                 # Align array dimensions if the server adjusted width/height to match aspect ratio
                 if img_np.shape[:2] != (h_px, w_px):
@@ -457,18 +457,18 @@ def render_map_tab() -> None:
             f"Pobrano: {img.shape[1]} × {img.shape[0]} px — "
             f"**{st.session_state['_map_caption']}**"
         )
-        c_prev, c_act = st.columns([1, 1])
-        with c_prev:
-            st.image(img, caption=st.session_state["_map_caption"], width="stretch")
-        with c_act:
+        st.image(img, caption=st.session_state["_map_caption"], width=600)
+        col_dl, col_rm = st.columns(2)
+        with col_dl:
             st.download_button(
                 "💾 Zapisz plik .tiff",
                 data=st.session_state["_map_raw_bytes"],
                 file_name=st.session_state["_map_filename"],
                 mime="image/tiff",
-                width=400,
+                use_container_width=True,
             )
-            if st.button("🗑️ Usuń pobraną ortofotomapę", width="stretch"):
+        with col_rm:
+            if st.button("🗑️ Usuń pobraną ortofotomapę", use_container_width=True):
                 for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
                           "_map_caption", "_map_filename", "_map_native_label"):
                     st.session_state.pop(k, None)

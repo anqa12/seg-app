@@ -95,15 +95,6 @@ def tile_layout(H: int, W: int, tile_size: int, overlap: float) -> tuple[int, li
     return tile_size, get_coords(H), get_coords(W)
 
 
-def count_tiles(img_shape: tuple, scale: float, tile_size: int, overlap: float) -> int:
-    """
-    How many tiles predict() would use for this image, scale, tile size and overlap.
-    """
-    H, W = img_shape[:2]
-    _, ys, xs = tile_layout(_snap32(H * scale), _snap32(W * scale), tile_size, overlap)
-    return len(ys) * len(xs)
-
-
 def predict(
         model: torch.nn.Module | None,
         img_np: np.ndarray,

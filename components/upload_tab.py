@@ -3,7 +3,7 @@ import streamlit as st
 from utils.display import load_image_from_upload
 from utils.session import reset_image_state, set_native_resolution
 
-PREVIEW_WIDTH = 400
+PREVIEW_WIDTH = 600
 
 
 def _clear_upload() -> None:

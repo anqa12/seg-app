@@ -238,8 +238,9 @@ def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = No
     pct = class_percentages(mask)
     head = (
         f'<div style="height:{_COV_HEAD_H}px;font-size:12px;font-weight:600;white-space:nowrap;'
-        f'overflow:hidden;text-overflow:ellipsis" title="{title}">{title}</div>'
-    )
+        f'overflow:hidden;text-overflow:ellipsis" title="{title}">'
+        f'{"Pokrycie terenu" if not title else title}</div>'
+    ) if title or True else ""
     tiles = []
     for i, cls in enumerate(CLASSES):
         val = pct[cls]
@@ -319,6 +320,26 @@ def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_co
         col.markdown(_coverage_tiles_html(label, mask, ref_pct), unsafe_allow_html=True)
 
 
+def _render_download_row(chunk: list[GridItem], n_cols: int) -> None:
+    """Download buttons for each predicted mask, always visible regardless of active tab."""
+    cols = _make_columns(n_cols)
+    # first column = Oryginał, no button; skip GT column if present
+    first_pred = n_cols - len(chunk)
+    for col, (label, _, mask) in zip(cols[first_pred:], chunk):
+        mask_rgb = mask_to_rgb(mask)
+        buf = io.BytesIO()
+        Image.fromarray(mask_rgb).save(buf, format="PNG")
+        safe = label.replace(" ", "_").replace("·", "").replace("/", "-")[:30]
+        col.download_button(
+            "⬇️ Pobierz maskę",
+            data=buf.getvalue(),
+            file_name=f"maska_{safe}.png",
+            mime="image/png",
+            use_container_width=True,
+            key=f"dl_{safe}_{id(mask)}",
+        )
+
+
 def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> None:
     """
     Shared renderer for all views: a comparison grid.
@@ -349,6 +370,8 @@ def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> No
         with tab_overlay:
             _render_image_row(chunk, ref_img, gt_fit, n_cols, as_overlay=True)
 
+        # Przyciski pobierania POZA zakładkami — zawsze widoczne
+        _render_download_row(chunk, n_cols)
         _render_coverage_row(chunk, mask_gt, n_cols)
 
     # extra space between the coverage tiles
@@ -379,7 +402,7 @@ def render_result_block(img_input: np.ndarray, mask: np.ndarray, label: str = ""
     """
     if label: st.caption(label)
     render_legend()
-    _render_grid([("Predykcja", img_input, mask)], mask_gt=None)
+    _render_grid([("", img_input, mask)], mask_gt=None)
 
 
 def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray, label: str = "") -> None:
@@ -392,7 +415,7 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
     st.markdown("##### Porównanie z Ground Truth")
     if label: st.caption(label)
     render_legend()
-    _render_grid([("Predykcja", img_input, mask_pred)], mask_gt=mask_gt)
+    _render_grid([("", img_input, mask_pred)], mask_gt=mask_gt)
 
     with st.expander("Metryki per klasa (IoU / F1)", expanded=True):
         metrics = _compute_metrics(mask_pred, mask_gt)

@@ -7,7 +7,7 @@ from utils.config import SAMPLE_IMAGES
 from utils.display import load_mask_from_path
 from utils.session import reset_image_state
 
-PREVIEW_WIDTH = 400
+PREVIEW_WIDTH = 600
 
 
 def render_sample_tab() -> None:
