@@ -110,7 +110,8 @@ with active_container:
         source_res = st.session_state["resolutions"][manual_label]
         st.session_state["source_res"] = source_res
 
-    available_resolutions = list(st.session_state["resolutions"].keys())
+    # available_resolutions = list(st.session_state["resolutions"].keys())
+    available_resolutions = sorted(st.session_state["resolutions"], key=st.session_state["resolutions"].get)
     default_res = [available_resolutions[0]]
 
     chosen_dataset_type = st.session_state.get("chosen_dataset_type")
@@ -167,51 +168,70 @@ with active_container:
             label_visibility="collapsed",
             key=f"selected_res_{st.session_state.get('selection_gen', 0)}"
         )
+    selected_res = sorted(selected_res, key=lambda label: st.session_state["resolutions"][label])
 
-    # skip resolutions this image cannot be downscaled to without being deformed
-    # (e.g. a small 25 cm/px crop cannot become a 10 m/px image)
-    unavailable = {}
+    # --- Validate the selection ------------------------------------------
+    # Every problem found is collected in `blockers`. While the list is not
+    # empty the "Uruchom segmentację" button is drawn but disabled. This
+    # replaces the old approach (silently dropping options + st.stop() before
+    # the button was even drawn).
+    n_m, n_r = len(selected_models), len(selected_res)
+    blockers = []
+
+    if n_m == 0 or n_r == 0:
+        blockers.append("Wybierz co najmniej jeden model i jedną rozdzielczość.")
+
+    if n_m > 1 and n_r > 1:
+        blockers.append(
+            "Wybrano wiele modeli **i** wiele rozdzielczości. "
+            "Wybierz **jeden model** lub **jedną rozdzielczość**."
+        )
+
+    # Checked on the ORIGINAL selection, before anything is removed. Before,
+    # unreachable resolutions were dropped first, so "2 models + 2 resolutions"
+    # (one of them unreachable) shrank to "2 models + 1 resolution" and slipped
+    # through the check above.
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
         if not ok:
-            unavailable[res_label] = reason
+            blockers.append(
+                f"**{res_label}** — nie można przeskalować zdjęcia: {reason} "
+                f"Odznacz tę rozdzielczość, aby uruchomić segmentację."
+            )
 
-    if unavailable:
-        for res_label, reason in unavailable.items():
-            st.warning(f"**{res_label}** — pominięto: {reason}")
-        selected_res = [r for r in selected_res if r not in unavailable]
-        if not selected_res:
-            st.stop()
+    for msg in blockers:
+        st.warning(msg)
 
-    # handle possible errors
-    n_m, n_r = len(selected_models), len(selected_res)
-    if n_m == 0 or n_r == 0:
-        st.warning("Wybierz co najmniej jeden model i jedną rozdzielczość.")
-        st.stop()
-    elif n_m > 1 and n_r > 1:
-        st.warning("Wybrano wiele modeli **i** wiele rozdzielczości. "
-                   "Wybierz **jeden model** lub **jedną rozdzielczość**.")
-        st.stop()
-    elif n_m == 1 and n_r > 1:
-        st.info(f"Tryb: **porównanie rozdzielczości** — model *{selected_models[0]}*, {n_r} rozdzielczości")
-    elif n_m > 1 and n_r == 1:
-        st.info(f"Tryb: **porównanie modeli** — {n_m} modeli, rozdzielczość *{selected_res[0]}*")
-    else:
-        st.info(f"Tryb: **pojedynczy wynik** — *{selected_models[0]}*, *{selected_res[0]}*")
+    # mode info only makes sense for a valid selection
+    if not blockers:
+        if n_m == 1 and n_r > 1:
+            st.info(f"Tryb: **porównanie rozdzielczości** — model *{selected_models[0]}*, {n_r} rozdzielczości")
+        elif n_m > 1 and n_r == 1:
+            st.info(f"Tryb: **porównanie modeli** — {n_m} modeli, rozdzielczość *{selected_res[0]}*")
+        else:
+            st.info(f"Tryb: **pojedynczy wynik** — *{selected_models[0]}*, *{selected_res[0]}*")
 
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
-    # Clear old results if parameters change
+    # Clear old results if parameters change (uses the original selection)
     current_params = f"{selected_models}_{selected_res}"
     if st.session_state.get("last_params") != current_params:
         st.session_state.pop("seg_results", None)
         st.session_state["last_params"] = current_params
 
-    # Start button logic
-    if st.button("Uruchom segmentację", type="primary", width="stretch"):
+    # Start button logic - disabled while the selection is invalid
+    if st.button("Uruchom segmentację", type="primary", width="stretch",
+                 disabled=bool(blockers)):
         st.session_state["seg_running"] = True
         st.session_state.pop("seg_results", None)
+
+    if blockers:
+        # Invalid selection: make sure nothing keeps "running" and no result
+        # computed for an older, valid selection stays on screen.
+        st.session_state["seg_running"] = False
+        st.session_state.pop("seg_results", None)
+        st.stop()
 
     running = st.session_state.get("seg_running", False)
 
