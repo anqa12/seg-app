@@ -124,19 +124,13 @@ st.markdown("""
 }
 
 /* Primary button */
-.stButton > button {
-    background-color: #2563EB;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 0.7rem 1.8rem;
-    font-weight: 500;
+div[data-testid="stButton"] > button[kind="primary"] {
+    background-color: #2563EB !important;
+    color: #ffffff !important;
+    border: none !important;
 }
-.stButton > button:hover,
-.stButton > button:focus {
-    background-color: #1D4ED8;
-    color: #fff;
-    border: none;
+div[data-testid="stButton"] > button[kind="primary"]:hover {
+    background-color: #1D4ED8 !important;
 }
 
 /* Hero preview (right side): input photo -> segmentation mask */

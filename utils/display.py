@@ -239,7 +239,7 @@ def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = No
     head = (
         f'<div style="height:{_COV_HEAD_H}px;font-size:12px;font-weight:600;white-space:nowrap;'
         f'overflow:hidden;text-overflow:ellipsis" title="{title}">'
-        f'{"Pokrycie terenu" if not title else title}</div>'
+        f'{"Wynik modelu" if not title else title}</div>'
     ) if title or True else ""
     tiles = []
     for i, cls in enumerate(CLASSES):
@@ -306,13 +306,13 @@ def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_co
     Coverage tiles placed directly under the images, column by column.
     """
     cols = _make_columns(n_cols)
-    cols[0].markdown("**Pokrycie terenu**")
+    # cols[0].markdown("**Wyniki**")
     first_pred = 1
     ref_pct = None
 
     if mask_gt is not None:
         ref_pct = class_percentages(mask_gt)
-        cols[0].caption("Mała liczba w kafelku predykcji = różnica względem Ground Truth (w p.p.).")
+        # cols[0].caption("Mała liczba w kafelku predykcji = różnica względem Ground Truth (w p.p.).")
         cols[1].markdown(_coverage_tiles_html("Ground Truth", mask_gt), unsafe_allow_html=True)
         first_pred = 2
 
@@ -331,11 +331,10 @@ def _render_download_row(chunk: list[GridItem], n_cols: int) -> None:
         Image.fromarray(mask_rgb).save(buf, format="PNG")
         safe = label.replace(" ", "_").replace("·", "").replace("/", "-")[:30]
         col.download_button(
-            "⬇️ Pobierz maskę",
+            "Pobierz maskę",
             data=buf.getvalue(),
             file_name=f"maska_{safe}.png",
             mime="image/png",
-            use_container_width=True,
             key=f"dl_{safe}_{id(mask)}",
         )
 
@@ -417,7 +416,7 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
     render_legend()
     _render_grid([("", img_input, mask_pred)], mask_gt=mask_gt)
 
-    with st.expander("Metryki per klasa (IoU / F1)", expanded=True):
+    with st.expander("Metryki (IoU / F1)", expanded=True):
         metrics = _compute_metrics(mask_pred, mask_gt)
         rows = [{"Klasa": cls, "IoU": metrics["iou"][i], "F1": metrics["f1"][i]} for i, cls in enumerate(CLASSES)]
         rows.append({

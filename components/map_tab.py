@@ -1,6 +1,7 @@
 import io
 import time
 from functools import lru_cache
+import cv2
 
 import numpy as np
 import requests
@@ -321,7 +322,7 @@ def render_map_tab() -> None:
 
         # 0 rectangles
         if num_drawings == 0:
-            st.info("Narysuj prostokąt na mapie, aby móc poprać ortofotomapę.")
+            st.info("Narysuj prostokąt na mapie, aby móc pobrać ortofotomapę.")
 
         # > 1 rectangles
         elif num_drawings > 1:
@@ -374,9 +375,8 @@ def render_map_tab() -> None:
 
         st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
         download_clicked = st.button(
-            "⬇️ Pobierz ortofotomapę (.tiff)",
+            "Pobierz",
             type="primary",
-            use_container_width=True,
             disabled=not can_download,
         )
 
@@ -454,23 +454,40 @@ def render_map_tab() -> None:
         st.markdown("---")
         img = st.session_state["_map_img_np"]
         st.success(
-            f"Pobrano: {img.shape[1]} × {img.shape[0]} px — "
+            f"✅ Pobrano: {img.shape[1]} × {img.shape[0]} px — "
             f"**{st.session_state['_map_caption']}**"
         )
-        st.image(img, caption=st.session_state["_map_caption"], width=600)
-        col_dl, col_rm = st.columns(2)
-        with col_dl:
-            st.download_button(
-                "💾 Zapisz plik .tiff",
-                data=st.session_state["_map_raw_bytes"],
-                file_name=st.session_state["_map_filename"],
-                mime="image/tiff",
-                use_container_width=True,
-            )
-        with col_rm:
-            if st.button("🗑️ Usuń pobraną ortofotomapę", use_container_width=True):
-                for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
-                          "_map_caption", "_map_filename", "_map_native_label"):
-                    st.session_state.pop(k, None)
-                reset_image_state()
-                st.rerun()
+
+        # Główny podział: lewa połowa na zdjęcie i przyciski, prawa pusta
+        col_img, _ = st.columns([1, 1])
+
+        with col_img:
+            # Sztuczne powiększenie dla lupy (pełnego ekranu)
+            disp_img = img
+            h, w = img.shape[:2]
+            if max(h, w) < 800:
+                scale = 800 / max(h, w)
+                disp_img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_NEAREST)
+
+            # Zdjęcie wypełnia dokładnie szerokość lewej kolumny
+            st.image(disp_img, caption=st.session_state["_map_caption"], width="stretch")
+
+            # Sub-kolumny na przyciski - dzielą szerokość pod zdjęciem idealnie 50/50
+            col_zapisz, col_usun = st.columns(2)
+
+            with col_zapisz:
+                st.download_button(
+                    "Zapisz",
+                    data=st.session_state["_map_raw_bytes"],
+                    file_name=st.session_state["_map_filename"],
+                    mime="image/tiff",
+                    width="stretch",
+                    type="primary"
+                )
+            with col_usun:
+                if st.button("Usuń", width="stretch", type="tertiary"):
+                    for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
+                              "_map_caption", "_map_filename", "_map_native_label"):
+                        st.session_state.pop(k, None)
+                    reset_image_state()
+                    st.rerun()

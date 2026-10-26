@@ -28,7 +28,7 @@ def render_sample_tab() -> None:
                 with col:
                     if os.path.exists(img_path):
                         thumb = Image.open(img_path).convert("RGB").resize((256, 256), Image.NEAREST)
-                        st.image(thumb, use_container_width=True)
+                        st.image(thumb, width="stretch")
                     else:
                         st.markdown(
                             '<div style="height:100px;background:rgba(128,128,128,0.08);'
@@ -36,8 +36,7 @@ def render_sample_tab() -> None:
                             'justify-content:center;font-size:11px;color:gray">'
                             'brak pliku</div>', unsafe_allow_html=True)
                     st.caption(info["desc"])
-                    if st.button("Wybierz", key=f"sample_{dataset_name}_{name}",
-                                 width="stretch"):
+                    if st.button("Wybierz", key=f"sample_{dataset_name}_{name}", width="stretch"):
 
                         # Full reset of the img state, after choosing new img
                         reset_image_state()
@@ -66,7 +65,7 @@ def render_sample_tab() -> None:
                              f"({st.session_state['source_res']} m/px)",
                      width=400)
 
-            if st.button("🗑️ Usuń wybrane zdjęcie", key="remove_sample"):
+            if st.button("Usuń", key="remove_sample", type="tertiary"):
                 reset_image_state()
                 st.rerun()
         else:

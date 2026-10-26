@@ -111,6 +111,6 @@ def render_upload_tab() -> None:
                 else:
                     st.caption("Brak rozdzielczości — podaj wartość żeby móc uruchomić segmentację.")
 
-        if st.button("🗑️ Usuń wgrane zdjęcie", width='stretch'):
+        if st.button("Usuń", type="tertiary"):
             _clear_upload()
             st.rerun()

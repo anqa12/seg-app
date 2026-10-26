@@ -1,9 +1,6 @@
 import streamlit as st
 import os
 import sys
-import io
-from PIL import Image
-import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,6 +19,70 @@ st.markdown("""
 <style>
 .block-container { padding-top: 1.5rem; }
 div[data-testid="stExpander"] { border: 1px solid rgba(128,128,128,0.2); border-radius:10px; }
+
+/* 1. Wyrównanie komunikatów do lewej */
+div[data-testid="stAlert"] {
+    max-width: 700px;
+    margin: 0 auto 1rem 0 !important;
+    border-radius: 10px;
+}
+
+/* 2. Równe przyciski (Wyśrodkowanie i szerokość) */
+div[data-testid="stButton"],
+div[data-testid="stDownloadButton"] {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+div[data-testid="stButton"] > button,
+div[data-testid="stDownloadButton"] > button {
+    width: 100% !important;
+    min-height: 46px !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease;
+}
+
+/* 3. Przycisk główny (Primary) - PÓŁPRZEZROCZYSTY NIEBIESKI (Zapisz, Uruchom) */
+div[data-testid="stButton"] > button[kind="primary"],
+div[data-testid="stDownloadButton"] > button[kind="primary"] {
+    background-color: rgba(59, 130, 246, 0.15) !important; /* Półprzezroczysty niebieski */
+    color: #60a5fa !important; /* Jasnoniebieski tekst */
+    border: 1px solid rgba(59, 130, 246, 0.4) !important;
+}
+div[data-testid="stButton"] > button[kind="primary"]:hover,
+div[data-testid="stDownloadButton"] > button[kind="primary"]:hover {
+    background-color: #2563eb !important; /* Pełny niebieski po najechaniu */
+    color: white !important;
+}
+
+/* 4. Przycisk poboczny (Secondary) - PRZEZROCZYSTY (Wybierz) */
+div[data-testid="stButton"] > button[kind="secondary"],
+div[data-testid="stDownloadButton"] > button[kind="secondary"] {
+    background-color: transparent !important;
+    color: inherit !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+div[data-testid="stButton"] > button[kind="secondary"]:hover,
+div[data-testid="stDownloadButton"] > button[kind="secondary"]:hover {
+    border-color: #8bb4f7 !important;
+    color: #8bb4f7 !important;
+}
+
+/* 5. Przycisk trzeciorzędny (Tertiary) - CZERWONY (Usuń, Zatrzymaj) */
+div[data-testid="stButton"] > button[kind="tertiary"],
+div[data-testid="stDownloadButton"] > button[kind="tertiary"] {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
+}
+div[data-testid="stButton"] > button[kind="tertiary"]:hover,
+div[data-testid="stDownloadButton"] > button[kind="tertiary"]:hover {
+    background-color: #ef4444 !important;
+    color: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -221,7 +282,7 @@ with active_container:
         st.session_state["last_params"] = current_params
 
     # Start button logic - disabled while the selection is invalid
-    if st.button("Uruchom segmentację", type="primary", width="stretch",
+    if st.button("Uruchom segmentację", type="primary",
                  disabled=bool(blockers)):
         st.session_state["seg_running"] = True
         st.session_state.pop("seg_results", None)
@@ -240,7 +301,7 @@ with active_container:
 
     if running and "seg_results" not in st.session_state:
         with stop_button_placeholder:
-            if st.button("Zatrzymaj", width="stretch"):
+            if st.button("Zatrzymaj", type="tertiary"):
                 st.session_state["seg_running"] = False
                 st.warning("Segmentacja została zatrzymana przez użytkownika.")
                 st.stop()
