@@ -231,16 +231,11 @@ def _fit_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
     return cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
 
 
-def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = None) -> str:
+def _coverage_tiles_html(mask: np.ndarray, ref_pct: dict | None = None) -> str:
     """
     Small square tiles with the share of each class, for one mask.
     """
     pct = class_percentages(mask)
-    head = (
-        f'<div style="height:{_COV_HEAD_H}px;font-size:12px;font-weight:600;white-space:nowrap;'
-        f'overflow:hidden;text-overflow:ellipsis" title="{title}">'
-        f'{"Wynik modelu" if not title else title}</div>'
-    ) if title or True else ""
     tiles = []
     for i, cls in enumerate(CLASSES):
         val = pct[cls]
@@ -274,7 +269,7 @@ def _coverage_tiles_html(title: str, mask: np.ndarray, ref_pct: dict | None = No
         '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;width:100%;'
         'max-width:300px;margin:0 auto;container-type:inline-size">' + "".join(tiles) + "</div>"
     )
-    return head + grid
+    return grid
 
 
 def _render_image_row(
@@ -301,23 +296,23 @@ def _render_image_row(
         col.image(view, caption=label, width="stretch")
 
 
-def _render_coverage_row(chunk: list[GridItem], mask_gt: np.ndarray | None, n_cols: int) -> None:
+def _render_coverage_row(chunk: list[tuple[str, np.ndarray, np.ndarray]], mask_gt: np.ndarray | None, n_cols: int) -> None:
     """
     Coverage tiles placed directly under the images, column by column.
     """
     cols = _make_columns(n_cols)
-    # cols[0].markdown("**Wyniki**")
     first_pred = 1
     ref_pct = None
 
     if mask_gt is not None:
         ref_pct = class_percentages(mask_gt)
-        # cols[0].caption("Mała liczba w kafelku predykcji = różnica względem Ground Truth (w p.p.).")
-        cols[1].markdown(_coverage_tiles_html("Ground Truth", mask_gt), unsafe_allow_html=True)
+        # Usunięto argument "Ground Truth"
+        cols[1].markdown(_coverage_tiles_html(mask_gt), unsafe_allow_html=True)
         first_pred = 2
 
-    for col, (label, _, mask) in zip(cols[first_pred:], chunk):
-        col.markdown(_coverage_tiles_html(label, mask, ref_pct), unsafe_allow_html=True)
+    for col, (_, _, mask) in zip(cols[first_pred:], chunk):
+        # Usunięto argument "label"
+        col.markdown(_coverage_tiles_html(mask, ref_pct), unsafe_allow_html=True)
 
 
 def _render_download_row(chunk: list[GridItem], n_cols: int) -> None:
@@ -401,7 +396,7 @@ def render_result_block(img_input: np.ndarray, mask: np.ndarray, label: str = ""
     """
     if label: st.caption(label)
     render_legend()
-    _render_grid([("", img_input, mask)], mask_gt=None)
+    _render_grid([(label, img_input, mask)], mask_gt=None)
 
 
 def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: np.ndarray, label: str = "") -> None:
@@ -411,10 +406,8 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
     h, w = mask_pred.shape
     mask_gt = _fit_mask(mask_gt, (h, w))
 
-    st.markdown("##### Porównanie z Ground Truth")
-    if label: st.caption(label)
     render_legend()
-    _render_grid([("", img_input, mask_pred)], mask_gt=mask_gt)
+    _render_grid([(label, img_input, mask_pred)], mask_gt=mask_gt)
 
     with st.expander("Metryki (IoU / F1)", expanded=True):
         metrics = _compute_metrics(mask_pred, mask_gt)
@@ -427,31 +420,39 @@ def render_gt_comparison(img_input: np.ndarray, mask_pred: np.ndarray, mask_gt: 
         render_metrics_table(rows, best_class_by="IoU")
 
 
-def render_resolution_comparison(results: list[dict], mask_gt: np.ndarray | None = None) -> None:
+def render_comparison(
+        compare_by: str,
+        constant_label: str,
+        data: list[dict] | dict,
+        img_input: np.ndarray | None = None,
+        mask_gt: np.ndarray | None = None
+) -> None:
     """
-    Compares predictions with different resolutions. Mean IoU and F1 metrics are available.
+    Uniwersalna funkcja do renderowania siatki porównawczej modeli lub rozdzielczości.
     """
-    if not results: return
+    if not data: return
     render_legend()
-    # Each column is labelled with the resolution and the size of the rescaled image
-    items = [
-        (f"{r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px", r["img"], r["mask"])
-        for r in results
-    ]
+
+    items = []
+    summary_items = []
+
+    # 1. Przygotowanie ujednoliconych danych do siatki i tabeli
+    if compare_by == "Rozdzielczość":
+        # data to lista słowników z wynikami dla różnych rozdzielczości
+        for r in data:
+            long_label = f"{constant_label} · {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px"
+            items.append((long_label, r["img"], r["mask"]))
+            summary_items.append((r["label"], r["mask"]))
+
+    elif compare_by == "Model":
+        # data to słownik z maskami dla poszczególnych modeli
+        for model_name, mask in data.items():
+            long_label = f"{model_name} · {constant_label} · {img_input.shape[1]}×{img_input.shape[0]} px"
+            items.append((long_label, img_input, mask))
+            summary_items.append((model_name, mask))
+
+    # 2. Renderowanie interfejsu (Siatka + Tabela z metrykami)
     _render_grid(items, mask_gt=mask_gt)
 
     if mask_gt is not None:
-        _render_summary_table("Rozdzielczość", [(r["label"], r["mask"]) for r in results], mask_gt)
-
-
-def render_model_comparison(img_input: np.ndarray, model_results: dict, mask_gt: np.ndarray | None = None) -> None:
-    """
-    Compares predictions with different models. Mean IoU and F1 metrics are available.
-    """
-    render_legend()
-    # All models ran on the same input, so every column shares img_input
-    items = [(name, img_input, mask) for name, mask in model_results.items()]
-    _render_grid(items, mask_gt=mask_gt)
-
-    if mask_gt is not None:
-        _render_summary_table("Model", list(model_results.items()), mask_gt)
+        _render_summary_table(compare_by, summary_items, mask_gt)

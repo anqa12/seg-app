@@ -60,7 +60,7 @@ def render_sample_tab() -> None:
                 st.session_state["mask_gt"] = None
 
             st.image(st.session_state["img_np"],
-                     caption=f"Wybrane zdjęcie — {st.session_state['img_np'].shape[1]}×"
+                     caption=f"{chosen} — {st.session_state['img_np'].shape[1]}×"
                              f"{st.session_state['img_np'].shape[0]} px "
                              f"({st.session_state['source_res']} m/px)",
                      width=400)

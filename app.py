@@ -21,8 +21,8 @@ PREVIEW_MASK_PATH: Path = Path("assets/preview_mask.png")
 PREVIEW_IMAGE_PATH: Path = Path("assets/preview_img.jpg")
 
 
+# gray placeholder for image
 def _placeholder(text: str) -> str:
-    """Grey box shown instead of an image that is missing, so the page still loads."""
     return (
         '<div style="aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;'
         'border-radius:8px;background:rgba(128,128,128,0.12);font-size:13px;opacity:0.6">'
@@ -258,7 +258,7 @@ st.markdown(f"""
 
 # Feature cards
 st.markdown("""
-<div class="section-title">Co możesz zrobić</div>
+<div class="section-title"></div>
 <div class="cards">
 <div class="card">
 <div class="title">Wybierz zdjęcie</div>

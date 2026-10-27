@@ -49,12 +49,13 @@ MAX_STRETCH_FRACTION = 0.10
 def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
     """
     Check whether the image can be rescaled by `scale` without being deformed.
+    Returns (ok, reason); `reason` is a plain sentence for the user that describes
+    only the problem (the caller adds what to do about it).
     """
-
     if scale > 1.05:
         return False, (
-            f"skala {scale:.2f}× oznacza próbę zwiększenia rozdzielczości "
-            f"powyżej jakości źródłowej, co jest zablokowane."
+            "to zdjęcie ma gorszą rozdzielczość niż wybrana, a powiększanie "
+            "nie doda do niego nowych szczegółów."
         )
 
     H, W = img_shape[:2]
@@ -62,16 +63,16 @@ def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
 
     if min(int(H_s), int(W_s)) < MIN_SIDE_PX:
         return False, (
-            f"po zmniejszeniu zdjęcie miałoby {int(W_s)}×{int(H_s)} px "
-            f"(minimum to {MIN_SIDE_PX} px na bok), więc zostałoby zdeformowane."
+            f"to zdjęcie jest za małe na taką rozdzielczość — po przeliczeniu miałoby tylko "
+            f"{int(W_s)} × {int(H_s)} px, a model potrzebuje co najmniej {MIN_SIDE_PX} px na bok."
         )
 
     # how much the sides change when snapped to a multiple of 32 (worst of the two)
     stretch = max(abs(_snap32(H_s) / H_s - 1), abs(_snap32(W_s) / W_s - 1))
     if stretch > MAX_STRETCH_FRACTION:
         return False, (
-            f"po zmniejszeniu zdjęcie miałoby {int(W_s)}×{int(H_s)} px, a dopasowanie do "
-            f"wielokrotności 32 zniekształciłoby je o {stretch:.0%}."
+            f"po przeliczeniu zdjęcie miałoby {int(W_s)} × {int(H_s)} px, a model wymaga wymiarów "
+            f"podzielnych przez 32 — dopasowanie rozciągnęłoby obraz o {stretch:.0%} i pogorszyło wynik."
         )
     return True, ""
 

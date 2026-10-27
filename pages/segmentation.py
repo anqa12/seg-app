@@ -7,8 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.config import MODELS, RESOLUTIONS, LANDCOVER_MODELS, BIGEARTHNET_MODELS, TILE_OVERLAP, USE_GAUSSIAN_VOTING
 from utils.models import load_model
 from utils.inference import rescale, predict, check_rescale
-from utils.display import (render_result_block, render_resolution_comparison,
-                           render_model_comparison, render_gt_comparison)
+from utils.display import (render_result_block, render_comparison, render_gt_comparison)
 from components.sample_tab import render_sample_tab
 from components.upload_tab import render_upload_tab
 from components.map_tab import render_map_tab
@@ -255,10 +254,7 @@ with active_container:
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
         if not ok:
-            blockers.append(
-                f"**{res_label}** — nie można przeskalować zdjęcia: {reason} "
-                f"Odznacz tę rozdzielczość, aby uruchomić segmentację."
-            )
+            blockers.append(f"**{res_label}:** {reason} Odznacz tę rozdzielczość, aby uruchomić segmentację.")
 
     for msg in blockers:
         st.warning(msg)
@@ -415,7 +411,15 @@ with active_container:
                 else:
                     render_result_block(r["img"], r["mask"], label=label)
             else:
-                render_resolution_comparison(data, mask_gt=mask_gt)
+                # WYZWANIE DLA NOWEJ FUNKCJI: Porównanie rozdzielczości
+                from utils.display import render_comparison
+
+                render_comparison("Rozdzielczość", model_name, data, mask_gt=mask_gt)
 
         elif res["type"] == "model_compare":
-            render_model_comparison(res["img_input"], res["data"], mask_gt=mask_gt)
+            res_label = selected_res[0]
+            # WYZWANIE DLA NOWEJ FUNKCJI: Porównanie modeli
+            from utils.display import render_comparison
+
+            render_comparison("Model", res_label, res["data"], img_input=res["img_input"], mask_gt=mask_gt)
+

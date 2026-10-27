@@ -453,10 +453,7 @@ def render_map_tab() -> None:
     if st.session_state.get("_map_img_np") is not None:
         st.markdown("---")
         img = st.session_state["_map_img_np"]
-        st.success(
-            f"✅ Pobrano: {img.shape[1]} × {img.shape[0]} px — "
-            f"**{st.session_state['_map_caption']}**"
-        )
+        caption = f"Ortofotomapa z Geoportalu · {img.shape[1]} × {img.shape[0]} px · 25 cm/px",
 
         # Główny podział: lewa połowa na zdjęcie i przyciski, prawa pusta
         col_img, _ = st.columns([1, 1])
