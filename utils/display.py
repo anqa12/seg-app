@@ -315,11 +315,11 @@ def _render_coverage_row(chunk: list[tuple[str, np.ndarray, np.ndarray]], mask_g
         col.markdown(_coverage_tiles_html(mask, ref_pct), unsafe_allow_html=True)
 
 
-def _render_download_row(chunk: list[GridItem], n_cols: int) -> None:
+def _render_download_row(chunk: list[GridItem], n_cols: int, n_ref: int) -> None:
     """Download buttons for each predicted mask, always visible regardless of active tab."""
     cols = _make_columns(n_cols)
-    # first column = Oryginał, no button; skip GT column if present
-    first_pred = n_cols - len(chunk)
+    #  number of reference columns on the left (Oryginał, plus Ground Truth if present).
+    first_pred = n_ref
     for col, (label, _, mask) in zip(cols[first_pred:], chunk):
         mask_rgb = mask_to_rgb(mask)
         buf = io.BytesIO()
@@ -365,7 +365,7 @@ def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> No
             _render_image_row(chunk, ref_img, gt_fit, n_cols, as_overlay=True)
 
         # Przyciski pobierania POZA zakładkami — zawsze widoczne
-        _render_download_row(chunk, n_cols)
+        _render_download_row(chunk, n_cols, n_ref)
         _render_coverage_row(chunk, mask_gt, n_cols)
 
     # extra space between the coverage tiles

@@ -82,6 +82,12 @@ div[data-testid="stDownloadButton"] > button[kind="tertiary"]:hover {
     background-color: #ef4444 !important;
     color: white !important;
 }
+
+/* 6. Ukrycie podpisu "200MB per file..." obok przycisku Upload */
+div[data-testid="stFileUploaderDropzoneInstructions"],
+div[data-testid="stFileUploader"] small {
+    display: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 

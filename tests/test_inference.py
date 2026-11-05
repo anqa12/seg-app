@@ -79,7 +79,7 @@ def test_check_rescale_blocks_upsampling():
     is_valid, reason = check_rescale((500, 500), 4.0)
 
     assert is_valid is False
-    assert "zwiększenia rozdzielczości" in reason
+    assert "powiększanie" in reason
 
 
 def test_predict_without_voting():

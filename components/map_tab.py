@@ -302,7 +302,7 @@ def render_map_tab() -> None:
         # Static key ensures the iframe is preserved without reloading
         map_data = st_folium(
             m,
-            height=1000,
+            height=750,
             width=True,
             key="geoportal_map",
             returned_objects=["all_drawings"],

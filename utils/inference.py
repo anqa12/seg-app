@@ -106,12 +106,8 @@ def predict(
         batch_size: int = 8,
 ) -> np.ndarray | None:
     """
-    Perform semantic segmentation prediction on a large image by splitting it
+    Performs semantic segmentation prediction on a large image by splitting it
     into smaller overlapping tiles and stitching the outputs back together.
-
-    Tiles go through the network in batches of `batch_size` instead of one by one.
-    Why: one big call is much faster than many small ones, especially on a GPU, and
-    the result is the same because every tile is still processed independently.
     """
     if model is None:
         return None
@@ -127,7 +123,7 @@ def predict(
     total = len(ys) * len(xs)
 
     if total == 0:
-        st.warning(f"Zdjęcie ({W}×{H} px) za małe dla kafelka {tile_size}×{tile_size} px.")
+        st.warning(f"Zdjęcie ({W}×{H} px) za małe dla wycinka {tile_size}×{tile_size} px.")
         return None
 
     device = next(model.parameters()).device
@@ -139,7 +135,7 @@ def predict(
         counts = np.zeros((H, W), dtype=np.float32)
         window = _get_window(tile_size)
 
-    bar = st.progress(0, text=progress_label or "Segmentuję…")
+    bar = st.progress(0, text=progress_label or "Segmentacja w trakcie")
     done = 0
 
     # all tile positions in reading order; processed batch_size at a time
@@ -166,8 +162,6 @@ def predict(
         # inference_mode = no_grad but even lighter (no gradient bookkeeping at all)
         with torch.inference_mode():
             logits = model(tensor)
-            # softmax / argmax are done on the same device (the GPU, if used) and only
-            # the small result is copied back, not the raw logits
             out = torch.softmax(logits, dim=1) if use_voting else logits.argmax(dim=1)
         out = out.cpu().numpy()  # (B, C, h, w) with voting, (B, h, w) without
 
@@ -184,7 +178,7 @@ def predict(
                 counts[y:y_end, x:x_end] += w_real_window
 
         done += len(batch)
-        bar.progress(done / total, text=f"{progress_label} {done}/{total} kafelków…")
+        bar.progress(done / total, text=f"{progress_label} {done}/{total} wycinków")
 
     bar.empty()
 
