@@ -24,7 +24,7 @@ def _get_window(tile_size: int) -> np.ndarray:
     return _GAUSS_CACHE[tile_size]
 
 
-def _snap32(size: float) -> int:
+def _align_to_32(size: float) -> int:
     """
     Round a side length to the NEAREST multiple of 32 (never below 32).
     """
@@ -33,16 +33,16 @@ def _snap32(size: float) -> int:
 
 def rescale(img: np.ndarray, scale: float) -> np.ndarray:
     """
-    Rescale the image by `scale` and snap each side to a multiple of 32 (UNet requirement).
+    Rescale the image by `scale` and align each side to a multiple of 32 (UNet requirement).
     """
     H, W = img.shape[:2]
-    return cv2.resize(img, (_snap32(W * scale), _snap32(H * scale)), interpolation=cv2.INTER_AREA)
+    return cv2.resize(img, (_align_to_32(W * scale), _align_to_32(H * scale)), interpolation=cv2.INTER_AREA)
 
 
 # Smallest side (in px) the image may have after downscaling.
 MIN_SIDE_PX = 32
 
-# Largest change of a side (0.10 = 10 %) allowed when it is snapped to a multiple of 32.
+# Largest change of a side (0.10 = 10 %) allowed when it is aligned to a multiple of 32.
 MAX_STRETCH_FRACTION = 0.10
 
 
@@ -67,8 +67,8 @@ def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
             f"{int(W_s)} × {int(H_s)} px, a model potrzebuje co najmniej {MIN_SIDE_PX} px na bok."
         )
 
-    # how much the sides change when snapped to a multiple of 32 (worst of the two)
-    stretch = max(abs(_snap32(H_s) / H_s - 1), abs(_snap32(W_s) / W_s - 1))
+    # how much the sides change when aligned to a multiple of 32 (worst of the two)
+    stretch = max(abs(_align_to_32(H_s) / H_s - 1), abs(_align_to_32(W_s) / W_s - 1))
     if stretch > MAX_STRETCH_FRACTION:
         return False, (
             f"po przeliczeniu zdjęcie miałoby {int(W_s)} × {int(H_s)} px, a model wymaga wymiarów "
@@ -163,7 +163,8 @@ def predict(
         with torch.inference_mode():
             logits = model(tensor)
             out = torch.softmax(logits, dim=1) if use_voting else logits.argmax(dim=1)
-        out = out.cpu().numpy()  # (B, C, h, w) with voting, (B, h, w) without
+        # (B, C, h, w) with voting, (B, h, w) without
+        out = out.cpu().numpy()
 
         for (y, x), res in zip(batch, out):
             y_end = min(y + tile_size, H)

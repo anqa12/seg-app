@@ -36,7 +36,7 @@ def _get_http_session() -> requests.Session:
     """
     Create and configure a requests.Session with automated retry logic.
     Only connection problems are retried here. Temporary HTTP errors (404, 429, 5xx) are
-    retried in _fetch_wms instead, so that every new attempt can use a brand new connection.
+    retried in _fetch_wms instead, so that every new attempt can use a new connection.
     """
     session = requests.Session()
     retries = Retry(
@@ -84,9 +84,6 @@ def _calc_image_size(w_m: float, h_m: float) -> tuple[int, int]:
     return width, height
 
 
-# ==========================================
-# WMS
-# ==========================================
 def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
                on_progress=None, on_status=None) -> tuple[bytes | None, str | None]:
     """

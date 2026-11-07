@@ -95,6 +95,7 @@ def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     for c in range(NUM_CLASSES):
         p, g = (pred == c), (gt == c)
         if not p.any() and not g.any():
+            # class absent in both masks: leave NaN
             continue
         tp = (p & g).sum()
         fp = (p & ~g).sum()
@@ -179,7 +180,8 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
         is_class_row = ~df["Klasa"].astype(str).str.startswith("—")
         is_eligible = is_class_row & (df["Klasa"] != CLASSES[0])
         vals = rounded[best_class_by].where(is_eligible)
-        winners = vals == vals.max()  # NaN never equals the max, so absent classes are skipped
+        # NaN never equals the max, so absent classes are skipped
+        winners = vals == vals.max()
         styles.loc[winners, ["Klasa", best_class_by]] = _BEST_STYLE
         return styles
 
@@ -210,7 +212,8 @@ def _make_columns(n_used: int) -> list:
     """
     if n_used >= 3:
         return st.columns(n_used)
-    cols = st.columns([0.5] + [1] * n_used + [0.5])  # half-width spacers on both sides
+    # half-width spacers on both sides
+    cols = st.columns([0.5] + [1] * n_used + [0.5])
     return cols[1:-1]
 
 

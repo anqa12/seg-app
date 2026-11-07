@@ -3,36 +3,34 @@ import streamlit as st
 from utils.session import set_native_resolution, reset_image_state
 
 
+# add detected res to the session state (no duplicates)
 def test_set_native_resolution(monkeypatch):
-    """Test dodawania wykrytej rozdzielczości do stanu (bez duplikatów)."""
-    # 1. Przygotowujemy sztuczny stan Streamlita (zwykły dict)
+    # fake state
     mock_state = {"resolutions": {"0.25 m/px": 0.25, "1 m/px": 1.0}}
     monkeypatch.setattr(st, "session_state", mock_state)
 
-    # 2. Wywołujemy funkcję tak, jakby wgrywano zdjęcie 0.5m/px
+    # fake res = 0.5m/px
     label = set_native_resolution(0.50)
 
-    # 3. Sprawdzamy, czy funkcja zwróciła odpowiedni napis
     assert label == "wykryta: 0.50 m/px"
-    # I czy ten napis faktycznie zapisał się w słowniku
     assert mock_state["resolutions"]["wykryta: 0.50 m/px"] == 0.50
 
 
-def test_set_native_resolution_overwrites_old_native(monkeypatch):
-    """Test sprawdza, czy po wgraniu drugiego zdjęcia poprzednia 'wykryta' znika."""
+# replace old detected res with the new one
+def test_set_native_resolution_overwrite(monkeypatch):
     mock_state = {"resolutions": {"0.25 m/px": 0.25, "wykryta: 0.10 m/px": 0.10}}
     monkeypatch.setattr(st, "session_state", mock_state)
 
     set_native_resolution(2.0)
 
-    # Stara rozdzielczość 0.10 musiała zostać usunięta
+    # old res deleted
     assert "wykryta: 0.10 m/px" not in mock_state["resolutions"]
-    # Zastąpiła ją nowa
+    # new ores added
     assert mock_state["resolutions"]["wykryta: 2.00 m/px"] == 2.0
 
 
+# reset all params before uploading new img
 def test_reset_image_state(monkeypatch):
-    """Test twardego resetu przed załadowaniem nowego zdjęcia."""
     mock_state = {
         "img_np": [1, 2, 3],
         "img_source": "upload",
@@ -44,12 +42,10 @@ def test_reset_image_state(monkeypatch):
 
     reset_image_state()
 
-    # Sprawdzamy, czy aplikacja wyczyściła główne zmienne z pamięci RAM
+    # check if old params were deleted from RAM
     assert "img_np" not in mock_state
     assert "img_source" not in mock_state
     assert "seg_running" not in mock_state
 
-    # Pamięć po masce GT powinna być wyzerowana
     assert mock_state["mask_gt"] is None
-    # Dynamiczne rozdzielczości powinny zniknąć
     assert "wykryta: 0.50 m/px" not in mock_state["resolutions"]
