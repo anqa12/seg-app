@@ -6,7 +6,7 @@ from utils.config import NUM_CLASSES
 
 
 def _gaussian_window(size: int, sigma_ratio: float = 0.25) -> np.ndarray:
-    """Generate a 2D Gaussian window to blend overlapping tile predictions."""
+    """Generates a 2D Gaussian window to blend overlapping tile predictions."""
     sigma = size * sigma_ratio
     y, x = np.mgrid[0:size, 0:size]
     cy, cx = size / 2.0, size / 2.0
@@ -18,40 +18,32 @@ _GAUSS_CACHE = {}
 
 
 def _get_window(tile_size: int) -> np.ndarray:
-    """Retrieve or compute a cached Gaussian window for a given tile size."""
+    """Retrieves or compute a cached Gaussian window for a given tile size."""
     if tile_size not in _GAUSS_CACHE:
         _GAUSS_CACHE[tile_size] = _gaussian_window(tile_size)
     return _GAUSS_CACHE[tile_size]
 
 
 def _align_to_32(size: float) -> int:
-    """
-    Round a side length to the NEAREST multiple of 32 (never below 32).
-    """
+    """Rounds a side length to the NEAREST multiple of 32 (never below 32)."""
     return max(32, int(size / 32 + 0.5) * 32)
 
 
 def rescale(img: np.ndarray, scale: float) -> np.ndarray:
-    """
-    Rescale the image by `scale` and align each side to a multiple of 32 (UNet requirement).
-    """
+    """Rescales the image and aligns each side to a multiple of 32."""
     H, W = img.shape[:2]
     return cv2.resize(img, (_align_to_32(W * scale), _align_to_32(H * scale)), interpolation=cv2.INTER_AREA)
 
 
-# Smallest side (in px) the image may have after downscaling.
+# smallest side (in px) the image may have after downscaling
 MIN_SIDE_PX = 32
 
-# Largest change of a side (0.10 = 10 %) allowed when it is aligned to a multiple of 32.
+# largest change of a side (0.10 = 10 %) allowed when it is aligned to a multiple of 32
 MAX_STRETCH_FRACTION = 0.10
 
 
 def check_rescale(img_shape: tuple, scale: float) -> tuple[bool, str]:
-    """
-    Check whether the image can be rescaled by `scale` without being deformed.
-    Returns (ok, reason); `reason` is a plain sentence for the user that describes
-    only the problem (the caller adds what to do about it).
-    """
+    """Checks whether the image can be rescaled by `scale` without being deformed."""
     if scale > 1.05:
         return False, (
             "to zdjęcie ma gorszą rozdzielczość niż wybrana, a powiększanie "
@@ -159,7 +151,7 @@ def predict(
         tensor = torch.from_numpy(np.stack(tiles)).permute(0, 3, 1, 2).float() / 255.0
         tensor = tensor.to(device)
 
-        # inference_mode = no_grad but even lighter (no gradient bookkeeping at all)
+        # inference_mode = no_grad
         with torch.inference_mode():
             logits = model(tensor)
             out = torch.softmax(logits, dim=1) if use_voting else logits.argmax(dim=1)

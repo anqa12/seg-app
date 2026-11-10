@@ -39,7 +39,7 @@ OVERLAY_ALPHA: float = 0.45
 TILE_OVERLAP: float = 0.5
 USE_GAUSSIAN_VOTING: bool = True
 
-# One sample image: paths, display name and source resolution.
+# one sample image: paths, display name and source resolution.
 # "mask" is None when no ground-truth mask was found for the image.
 Sample = dict[str, str | float | None]
 

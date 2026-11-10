@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 
-# Sample image and corresponding mask
+# sample image and corresponding mask
 PREVIEW_MASK_PATH: Path = Path("assets/preview_mask.png")
 PREVIEW_IMAGE_PATH: Path = Path("assets/preview_img.jpg")
 
@@ -42,24 +42,24 @@ def _to_data_uri(path: str, mtime: float, colorize: bool) -> str:
     img = Image.open(path)
 
     if colorize:
-        arr = np.array(img)  # palette ("P") images give class indices directly
+        arr = np.array(img)
         if arr.ndim == 3:
             # RGB/RGBA masks: all channels hold the same index, one channel is enough
             arr = arr[..., 0]
         if arr.max() < len(CLASS_COLORS):
-            rgb = CLASS_COLORS[arr]  # class-index mask -> map each index to its color
+            # map each index to its color
+            rgb = CLASS_COLORS[arr]
         else:
-            rgb = np.array(img.convert("RGB"))  # values too large: already colored
+            # values too large: already colored
+            rgb = np.array(img.convert("RGB"))
         out = Image.fromarray(rgb)
     else:
         out = img.convert("RGB")
 
-    # Each of the two images only takes half of the hero, so 800 px is plenty.
-    # NEAREST for masks keeps class borders sharp (smoother filters would blend colors
-    # into classes that don't exist); LANCZOS gives the best quality for a photo.
     max_width = 800
     if out.width > max_width:
         new_height = round(out.height * max_width / out.width)
+        # nearest - keeps class borders sharp, LANCZOS gives the best quality for a photo
         out = out.resize((max_width, new_height), Image.NEAREST if colorize else Image.LANCZOS)
 
     buf = io.BytesIO()
@@ -73,7 +73,7 @@ def _to_data_uri(path: str, mtime: float, colorize: bool) -> str:
 
 
 def _preview_item(path: Path | None, caption: str, colorize: bool, missing: str) -> str:
-    """One image with its caption (or a placeholder if the file does not exist)."""
+    """One image with its caption."""
     if path is None or not path.exists():
         body = _placeholder(missing)
     else:
@@ -89,7 +89,7 @@ def load_preview_html() -> str:
     return f'<div class="preview"><div class="pair">{photo}<div class="arrow">→</div>{mask}</div></div>'
 
 
-# Global styles
+# global styles
 st.markdown("""
 <style>
 /* Hide Streamlit's default chrome */
@@ -246,7 +246,7 @@ model i rozdzielczość, a następnie porównaj wyniki.
 with right:
     st.markdown(load_preview_html(), unsafe_allow_html=True)
 
-# Key numbers (model, dataset, class and resolution counts come from config)
+# key numbers (model, dataset, class and resolution counts come from config)
 st.markdown(f"""
 <div class="stats">
 <div class="stat"><div class="num">{len(MODELS)}</div><div class="label">modeli do porównania</div></div>
@@ -256,7 +256,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Feature cards
+# feature cards
 st.markdown("""
 <div class="section-title"></div>
 <div class="cards">
@@ -275,7 +275,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Segmentation classes
+# segmentation classes
 chips = "".join(
     f'<span class="chip"><span class="dot" style="background:{CLASS_HEX[i]}"></span>{name}</span>'
     for i, name in enumerate(CLASSES)
@@ -285,7 +285,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Footer
+# footer
 st.markdown("""
 <div class="footer">
 <b>Zbiory danych:</b> LandCover.ai (25 cm/px, Polska) · BigEarthNet reBEN v2.0 (10 m/px, Europa)<br>

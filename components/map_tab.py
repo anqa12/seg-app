@@ -25,8 +25,6 @@ WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardReso
 RES_M = 0.25  # standard res 25 cm/px
 MAX_PX = 4096  # max pxl to avoid wms errors
 HTTP_TIMEOUT = (5, 60)  # (connect, read) in seconds
-# Geoportal sometimes answers 404/5xx for a request that works a moment later.
-# Such answers are retried after these pauses (seconds): 5 attempts in total, ~13 s of waiting.
 RETRY_PAUSES = (1.0, 2.0, 4.0, 6.0)
 TRANSIENT_STATUSES = (404, 429, 500, 502, 503, 504)
 POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 24.2}  # Poland bounds for displaying
@@ -35,8 +33,6 @@ POLAND_BOUNDS = {"min_lat": 48.9, "max_lat": 55.0, "min_lon": 14.0, "max_lon": 2
 def _get_http_session() -> requests.Session:
     """
     Create and configure a requests.Session with automated retry logic.
-    Only connection problems are retried here. Temporary HTTP errors (404, 429, 5xx) are
-    retried in _fetch_wms instead, so that every new attempt can use a new connection.
     """
     session = requests.Session()
     retries = Retry(
@@ -87,16 +83,14 @@ def _calc_image_size(w_m: float, h_m: float) -> tuple[int, int]:
 def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
                on_progress=None, on_status=None) -> tuple[bytes | None, str | None]:
     """
-    Query the Geoportal WMS GetMap service to retrieve aerial orthoimagery for a given metric BBOX.
-    Iterates through image formats (JPEG, PNG, TIFF) as fallback strategies and reports progress.
-    Returns (raw_bytes, None) on success or (None, error_message) on failure.
+    Query the Geoportal WMS GetMap service to retrieve ortophotomap for a given BBOX.
 
     Temporary errors (404/429/5xx, connection problems) are retried after growing pauses
     (RETRY_PAUSES), and on_status(text) tells the UI what is going on during the wait.
     """
     bbox_str = f"{x_min:.2f},{y_min:.2f},{x_max:.2f},{y_max:.2f}"
 
-    # Custom headers are required; bare requests User-Agents are blocked by the government firewall (WAF)
+    # custom headers are required; bare requests User-Agents are blocked by the government firewall (WAF)
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -123,9 +117,7 @@ def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
                               f"Ponawiam, próba {attempt + 1} z {len(RETRY_PAUSES) + 1}…")
                 time.sleep(pause)
 
-            # A NEW session (= a new connection) for every attempt. A kept-alive connection
-            # may stay tied to the same, currently failing, server behind Geoportal's gateway,
-            # while a new connection can be served by another one.
+            # a new session for every attempt
             session = _get_http_session()
             try:
                 with session.get(WMS_URL, params=params, headers=headers,
@@ -134,9 +126,9 @@ def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
 
                     if resp.status_code in TRANSIENT_STATUSES:
                         last_problem = f"HTTP {resp.status_code}"
-                        # visible in the terminal, to see what Geoportal really answers
-                        print(f"[WMS] {fmt}, attempt {attempt + 1}: HTTP {resp.status_code}, "
-                              f"body: {resp.content[:150]!r}")
+                        # geoportal response
+                        # print(f"[WMS] {fmt}, attempt {attempt + 1}: HTTP {resp.status_code}, "
+                        #       f"body: {resp.content[:150]!r}")
                         continue
 
                     # Geoportal often returns HTTP 200 with an XML ServiceException payload on internal failure
@@ -177,8 +169,7 @@ def _fetch_wms(x_min, y_min, x_max, y_max, width, height,
                 session.close()
 
         else:
-            # all attempts were used up on temporary errors (the format is not the cause,
-            # so there is no point in trying the next one)
+            # all attempts reported a problem
             if last_problem == "HTTP 404":
                 return None, (
                     "Geoportal wielokrotnie zwrócił błąd 404 (brak danych albo chwilowa awaria po "
@@ -214,7 +205,7 @@ def _is_blank(img_np, threshold=0.98) -> bool:
 
 def _to_geotiff(img_np, x_min, y_max, pixel_size) -> bytes | None:
     """
-    Encode an RGB NumPy array into GeoTIFF binary bytes in memory, attaching EPSG:2180 spatial georeference.
+    Encode an rgb numpy array into geotiff binary bytes in memory
     """
     try:
         transform = from_origin(x_min, y_max, pixel_size, pixel_size)
@@ -232,13 +223,12 @@ def _to_geotiff(img_np, x_min, y_max, pixel_size) -> bytes | None:
 
 
 def _plain_tiff(img_np) -> bytes:
-    """Fallback standard TIFF exporter without spatial metadata if GeoTIFF encoding fails."""
+    """Fallback standard tiff export without spatial metadata if geotiff encoding fails."""
     buf = io.BytesIO()
     Image.fromarray(img_np).save(buf, format="TIFF")
     return buf.getvalue()
 
 
-# MAIN CUI COMPONENT
 def render_map_tab() -> None:
     """
     Main function to render the map tab.
@@ -255,7 +245,7 @@ def render_map_tab() -> None:
     if "current_bbox" not in st.session_state:
         st.session_state["current_bbox"] = None
 
-    # Construct Folium map centered over Poland with spatial boundary limits
+    # construct folium map centered over Poland with spatial boundary limits
     m = folium.Map(
         location=[52.0, 19.5], zoom_start=6, min_zoom=5,
         tiles=None, max_bounds=True,
@@ -276,7 +266,7 @@ def render_map_tab() -> None:
     ).add_to(m)
     folium.LayerControl(position="topright").add_to(m)
 
-    # Only draw rectangles
+    # only draw rectangles
     Draw(
         draw_options={
             "rectangle": True, "polygon": False, "polyline": False,
@@ -285,7 +275,7 @@ def render_map_tab() -> None:
         edit_options={"edit": True, "remove": True},
     ).add_to(m)
 
-    # Search Bar for address
+    # search bar for address
     Geocoder(
         collapsed=True,
         position="topleft",
@@ -296,7 +286,7 @@ def render_map_tab() -> None:
     col_map, col_info = st.columns([3, 1], gap="medium")
 
     with col_map:
-        # Static key ensures the iframe is preserved without reloading
+        # static key ensures the iframe is preserved without reloading
         map_data = st_folium(
             m,
             height=750,
@@ -305,7 +295,7 @@ def render_map_tab() -> None:
             returned_objects=["all_drawings"],
         )
 
-    # Evaluate all geometry shapes currently present on the canvas
+    # evaluate all geometry shapes currently present on the canvas
     all_drawings = (map_data.get("all_drawings") or []) if map_data else []
     num_drawings = len(all_drawings)
 
@@ -315,7 +305,8 @@ def render_map_tab() -> None:
 
     with col_info:
         st.markdown("#### Wybrany obszar")
-        max_side_m = MAX_PX * RES_M  # Maximum allowed extent in meters
+        # maximum allowed extent in meters
+        max_side_m = MAX_PX * RES_M
 
         # 0 rectangles
         if num_drawings == 0:
@@ -419,7 +410,7 @@ def render_map_tab() -> None:
                 with st.expander("Podgląd (diagnostyka)"):
                     st.image(img_np, width=600)
             else:
-                # Align array dimensions if the server adjusted width/height to match aspect ratio
+                # align array dimensions if the server adjusted width/height to match aspect ratio
                 if img_np.shape[:2] != (h_px, w_px):
                     img_np = np.array(
                         Image.fromarray(img_np).resize((w_px, h_px), Image.BILINEAR)
@@ -428,7 +419,7 @@ def render_map_tab() -> None:
                 geo_bytes = _to_geotiff(img_np, x_min, y_max, RES_M)
                 save_bytes = geo_bytes if geo_bytes is not None else _plain_tiff(img_np)
 
-                # Keep the downloaded image to global session state for inference
+                # keep the downloaded image to global session state for inference
                 reset_image_state()
                 st.session_state.update({
                     "img_np":              img_np,
@@ -446,30 +437,27 @@ def render_map_tab() -> None:
                 progress.empty()
                 st.rerun()
 
-    # Preview of the downloaded image
+    # preview of the downloaded image
     if st.session_state.get("_map_img_np") is not None:
         st.markdown("---")
         img = st.session_state["_map_img_np"]
         caption = f"Ortofotomapa z Geoportalu · {img.shape[1]} × {img.shape[0]} px · 25 cm/px",
 
-        # Główny podział: lewa połowa na zdjęcie i przyciski, prawa pusta
         col_img, _ = st.columns([1, 1])
 
         with col_img:
-            # Sztuczne powiększenie dla lupy (pełnego ekranu)
+            # resize for preview img
             disp_img = img
             h, w = img.shape[:2]
             if max(h, w) < 800:
                 scale = 800 / max(h, w)
                 disp_img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_NEAREST)
 
-            # Zdjęcie wypełnia dokładnie szerokość lewej kolumny
             st.image(disp_img, caption=st.session_state["_map_caption"], width="stretch")
 
-            # Sub-kolumny na przyciski - dzielą szerokość pod zdjęciem idealnie 50/50
-            col_zapisz, col_usun = st.columns(2)
+            col_save, col_del = st.columns(2)
 
-            with col_zapisz:
+            with col_save:
                 st.download_button(
                     "Zapisz",
                     data=st.session_state["_map_raw_bytes"],
@@ -478,7 +466,7 @@ def render_map_tab() -> None:
                     width="stretch",
                     type="primary"
                 )
-            with col_usun:
+            with col_del:
                 if st.button("Usuń", width="stretch", type="tertiary"):
                     for k in ("_map_img_np", "_map_raw_bytes", "_map_actual_res",
                               "_map_caption", "_map_filename", "_map_native_label"):

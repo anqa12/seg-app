@@ -13,7 +13,7 @@ from utils.config import CLASSES, CLASS_COLORS, CLASS_HEX, NUM_CLASSES, OVERLAY_
 
 
 def load_image_from_upload(uploaded_file) -> tuple[np.ndarray | None, float | None]:
-    """Load an image from an uploaded Streamlit file object."""
+    """Loads an image from an uploaded Streamlit file object."""
     name = uploaded_file.name.lower()
     raw = uploaded_file.read()
     res_m = None
@@ -83,8 +83,6 @@ def class_percentages(mask: np.ndarray) -> dict:
     return {cls: round((mask == i).sum() / total * 100, 1) for i, cls in enumerate(CLASSES)}
 
 
-# --- METRICS & BASE RENDERING ---
-
 def _compute_metrics(pred: np.ndarray, gt: np.ndarray) -> dict:
     """
     Computes metrics (IOU, F1) when mask is given.
@@ -153,13 +151,13 @@ def render_coverage_tiles(mask: np.ndarray) -> None:
         _tile(col, cls, val)
 
 
-# Style of a highlighted (best) cell in the metrics tables
+# style of a highlighted (best) cell in the metrics tables
 _BEST_STYLE = "background-color: rgba(46,160,67,0.22); color: #2EA043; font-weight: 700"
 
 
 def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best_class_by: str | None = None) -> None:
     """Show a metrics table. Highlights best result - in every metric column the best (highest) value is shown in green,
-    all other cells stay plain. Used when rows are alternatives (models, resolutions)
+    all other cells stay plain.
     """
     df = pd.DataFrame(metrics)
     numeric_cols = [c for c in df.columns if c not in ("Klasa", "Rozdzielczość", "Model")]
@@ -187,46 +185,35 @@ def render_metrics_table(metrics: list[dict], highlight_best: bool = False, best
 
     if best_class_by is not None and best_class_by in rounded and "Klasa" in df.columns:
         st.dataframe(df.style.apply(mark_best_class, axis=None), width="stretch", hide_index=True)
-    elif highlight_best and len(df) > 1:  # with a single row there is nothing to compare
+    # with a single row there is nothing to compare
+    elif highlight_best and len(df) > 1:
         st.dataframe(df.style.apply(mark_best_per_column, subset=numeric_cols),
                      width="stretch", hide_index=True)
     else:
         st.dataframe(df, width="stretch", hide_index=True)
 
 
-# How many predictions are placed side by side before the grid wraps to a new row.
+# num of preds in a row
 MAX_PRED_COLS = 3
 
-# One column of the comparison grid: (label, input image, predicted mask)
+# one column of the comparison grid: (label, input image, predicted mask)
 GridItem = tuple[str, np.ndarray, np.ndarray]
 
 
 def _make_columns(n_used: int) -> list:
-    """Create the grid columns and return only the ones that hold content.
-
-    What: with 3 or more content columns they simply share the full width equally.
-    With 2 (e.g. just the original and one mask) the two columns get the same width
-    that 3 columns would have, and the leftover space is split evenly on both sides.
-    Why: the images keep the same size for 2 and 3 columns (no tiny images, no empty
-    gap on the right) and the group always looks centered on the page.
+    """
+    Create the grid columns and return only the ones that hold content.
     """
     if n_used >= 3:
         return st.columns(n_used)
-    # half-width spacers on both sides
+    # half-width spacing on both sides
     cols = st.columns([0.5] + [1] * n_used + [0.5])
     return cols[1:-1]
 
 
-# Height (px) of the small title above each group of tiles.
-# Why: the same fixed height in every column keeps the tiles on the same line.
-_COV_HEAD_H = 26
-
-
 def _fit_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
-    """Resize a class mask to (h, w) with nearest-neighbour.
-
-    Why nearest: smoother filters would blend class ids into values that do not
-    exist (e.g. between 1 and 3 you would get 2 = a class that is not there).
+    """
+    Resize a class mask to (h, w) with nearest-neighbour.
     """
     h, w = shape
     if mask.shape == (h, w):
@@ -244,8 +231,9 @@ def _coverage_tiles_html(mask: np.ndarray, ref_pct: dict | None = None) -> str:
         val = pct[cls]
         hex_c = CLASS_HEX[i]
         active = val > 0.05
-        opacity = "1" if active else "0.35"  # fade classes that are (almost) absent
-        # Class 0 is black, so it gets a light border to stay visible on a dark theme
+        # fade classes that are (almost) absent
+        opacity = "1" if active else "0.35"
+        # class 0 is black, so it gets a light border to be visible
         dot_border = "border:1px solid rgba(255,255,255,.5)" if i == 0 else "border:1px solid rgba(0,0,0,.15)"
         card_border = (
             f"rgba(255,255,255,{'0.6' if active else '0.15'})" if i == 0
@@ -283,7 +271,7 @@ def _render_image_row(
         as_overlay: bool,
 ) -> None:
     """
-    Renders one row of images: Original | (Ground Truth) | prediction 1 | prediction 2 ...
+    Renders one row of images: Original | (Ground Truth) | prediction 1 | prediction 2
     """
     cols = _make_columns(n_cols)
     cols[0].image(ref_img, caption="Oryginał", width="stretch")
@@ -309,19 +297,17 @@ def _render_coverage_row(chunk: list[tuple[str, np.ndarray, np.ndarray]], mask_g
 
     if mask_gt is not None:
         ref_pct = class_percentages(mask_gt)
-        # Usunięto argument "Ground Truth"
         cols[1].markdown(_coverage_tiles_html(mask_gt), unsafe_allow_html=True)
         first_pred = 2
 
     for col, (_, _, mask) in zip(cols[first_pred:], chunk):
-        # Usunięto argument "label"
         col.markdown(_coverage_tiles_html(mask, ref_pct), unsafe_allow_html=True)
 
 
 def _render_download_row(chunk: list[GridItem], n_cols: int, n_ref: int) -> None:
     """Download buttons for each predicted mask, always visible regardless of active tab."""
     cols = _make_columns(n_cols)
-    #  number of reference columns on the left (Oryginał, plus Ground Truth if present).
+    #  number of reference columns on the left
     first_pred = n_ref
     for col, (label, _, mask) in zip(cols[first_pred:], chunk):
         mask_rgb = mask_to_rgb(mask)
@@ -340,17 +326,16 @@ def _render_download_row(chunk: list[GridItem], n_cols: int, n_ref: int) -> None
 def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> None:
     """
     Shared renderer for all views: a comparison grid.
-
-    items: list of (label, input image, predicted mask). One item = a single result,
-    several items = a comparison of models or resolutions.
     """
     h, w = items[0][2].shape
-    ref_img = items[0][1][:h, :w]  # shared "Oryginał" column
+    # RGB image
+    ref_img = items[0][1][:h, :w]
     gt_fit = _fit_mask(mask_gt, (h, w)) if mask_gt is not None else None
 
-    n_ref = 2 if mask_gt is not None else 1  # original + gt
+    # RGB + GT
+    n_ref = 2 if mask_gt is not None else 1
     slots = min(len(items), MAX_PRED_COLS)
-    # Always the same number of columns, so images keep the same width in every group
+    # always the same num of cols
     n_cols = n_ref + slots
 
     for start in range(0, len(items), slots):
@@ -367,7 +352,7 @@ def _render_grid(items: list[GridItem], mask_gt: np.ndarray | None = None) -> No
         with tab_overlay:
             _render_image_row(chunk, ref_img, gt_fit, n_cols, as_overlay=True)
 
-        # Przyciski pobierania POZA zakładkami — zawsze widoczne
+        # download buttons
         _render_download_row(chunk, n_cols, n_ref)
         _render_coverage_row(chunk, mask_gt, n_cols)
 
@@ -431,7 +416,7 @@ def render_comparison(
         mask_gt: np.ndarray | None = None
 ) -> None:
     """
-    Uniwersalna funkcja do renderowania siatki porównawczej modeli lub rozdzielczości.
+    Render comparison for all modes
     """
     if not data: return
     render_legend()
@@ -439,22 +424,21 @@ def render_comparison(
     items = []
     summary_items = []
 
-    # 1. Przygotowanie ujednoliconych danych do siatki i tabeli
     if compare_by == "Rozdzielczość":
-        # data to lista słowników z wynikami dla różnych rozdzielczości
+        # data: list of dicts for different resolutions
         for r in data:
             long_label = f"{constant_label} · {r['label']} · {r['img'].shape[1]}×{r['img'].shape[0]} px"
             items.append((long_label, r["img"], r["mask"]))
             summary_items.append((r["label"], r["mask"]))
 
     elif compare_by == "Model":
-        # data to słownik z maskami dla poszczególnych modeli
+        # data: dict of masks for different models
         for model_name, mask in data.items():
             long_label = f"{model_name} · {constant_label} · {img_input.shape[1]}×{img_input.shape[0]} px"
             items.append((long_label, img_input, mask))
             summary_items.append((model_name, mask))
 
-    # 2. Renderowanie interfejsu (Siatka + Tabela z metrykami)
+    # visual results + metrics
     _render_grid(items, mask_gt=mask_gt)
 
     if mask_gt is not None:

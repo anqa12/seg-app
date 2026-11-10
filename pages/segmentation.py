@@ -44,7 +44,7 @@ div[data-testid="stDownloadButton"] > button {
     transition: all 0.2s ease;
 }
 
-/* 3. Przycisk główny (Primary) - PÓŁPRZEZROCZYSTY NIEBIESKI (Zapisz, Uruchom) */
+/* 3. Przycisk główny (Primary) - zapisz i uruchom */
 div[data-testid="stButton"] > button[kind="primary"],
 div[data-testid="stDownloadButton"] > button[kind="primary"] {
     background-color: rgba(59, 130, 246, 0.15) !important; /* Półprzezroczysty niebieski */
@@ -57,7 +57,7 @@ div[data-testid="stDownloadButton"] > button[kind="primary"]:hover {
     color: white !important;
 }
 
-/* 4. Przycisk poboczny (Secondary) - PRZEZROCZYSTY (Wybierz) */
+/* 4. Przycisk poboczny (Secondary) - wybierz */
 div[data-testid="stButton"] > button[kind="secondary"],
 div[data-testid="stDownloadButton"] > button[kind="secondary"] {
     background-color: transparent !important;
@@ -70,7 +70,7 @@ div[data-testid="stDownloadButton"] > button[kind="secondary"]:hover {
     color: #8bb4f7 !important;
 }
 
-/* 5. Przycisk trzeciorzędny (Tertiary) - CZERWONY (Usuń, Zatrzymaj) */
+/* 5. Przycisk trzeci (Tertiary) - usuń i zatrzymaj */
 div[data-testid="stButton"] > button[kind="tertiary"],
 div[data-testid="stDownloadButton"] > button[kind="tertiary"] {
     background-color: rgba(239, 68, 68, 0.15) !important;
@@ -103,8 +103,6 @@ _DATASET_DEFAULT_RES = {
 def _default_models_for(dataset_type: str | None) -> list[str]:
     """
     Choose the right base model for LC and BEN datasets
-    :param dataset_type:
-    :return: list of available model names
     """
     if dataset_type == "BigEarthNet" and BIGEARTHNET_MODELS:
         return [BIGEARTHNET_MODELS[0]]
@@ -115,22 +113,19 @@ def _default_models_for(dataset_type: str | None) -> list[str]:
 
 def calculate_actual_scale(res_label: str, source_resolution_m: float) -> float:
     """
-    how much the source image has to be scaled to reach the chosen resolution
-    :param res_label:
-    :param source_resolution_m:
-    :return: float
+    How much the source image has to be scaled to reach the chosen resolution
     """
     target_res_m = st.session_state["resolutions"][res_label]
     return source_resolution_m / target_res_m
 
 
-# Session state
+# session state
 if "source_res" not in st.session_state: st.session_state["source_res"] = 0.25
 if "img_np" not in st.session_state: st.session_state["img_np"] = None
 if "mask_gt" not in st.session_state: st.session_state["mask_gt"] = None
 if "resolutions" not in st.session_state: st.session_state["resolutions"] = dict(RESOLUTIONS)
 
-# Choose image
+# choose image
 st.subheader("Wybierz zdjęcie")
 
 tab_sample, tab_map, tab_upload = st.tabs([
@@ -176,7 +171,6 @@ with active_container:
         source_res = st.session_state["resolutions"][manual_label]
         st.session_state["source_res"] = source_res
 
-    # available_resolutions = list(st.session_state["resolutions"].keys())
     available_resolutions = sorted(st.session_state["resolutions"], key=st.session_state["resolutions"].get)
     default_res = [available_resolutions[0]]
 
@@ -202,7 +196,7 @@ with active_container:
 
     col_m, col_r = st.columns(2)
 
-    # Choose model(s)
+    # choose model(s)
     with col_m:
         st.markdown("**Model**")
         st.caption("Wybierz jeden lub kilka do porównania")
@@ -224,7 +218,7 @@ with active_container:
                     f"trenowane na zbiorze **{chosen_dataset_type}** — wyniki mogą być słabe."
                 )
 
-    # Choose resolution(s)
+    # choose resolution(s)
     with col_r:
         st.markdown("**Rozdzielczość**")
         st.caption("Wybierz jedną lub kilka do porównania")
@@ -236,11 +230,7 @@ with active_container:
         )
     selected_res = sorted(selected_res, key=lambda label: st.session_state["resolutions"][label])
 
-    # --- Validate the selection ------------------------------------------
-    # Every problem found is collected in `blockers`. While the list is not
-    # empty the "Uruchom segmentację" button is drawn but disabled. This
-    # replaces the old approach (silently dropping options + st.stop() before
-    # the button was even drawn).
+    # validate the selection (compare models or resolutions)
     n_m, n_r = len(selected_models), len(selected_res)
     blockers = []
 
@@ -253,10 +243,6 @@ with active_container:
             "Wybierz **jeden model** lub **jedną rozdzielczość**."
         )
 
-    # Checked on the ORIGINAL selection, before anything is removed. Before,
-    # unreachable resolutions were dropped first, so "2 models + 2 resolutions"
-    # (one of them unreachable) shrank to "2 models + 1 resolution" and slipped
-    # through the check above.
     for res_label in selected_res:
         ok, reason = check_rescale(img_np.shape, calculate_actual_scale(res_label, source_res))
         if not ok:
@@ -265,7 +251,7 @@ with active_container:
     for msg in blockers:
         st.warning(msg)
 
-    # mode info only makes sense for a valid selection
+    # mode info for a valid selection
     if not blockers:
         if n_m == 1 and n_r > 1:
             st.info(f"Tryb: **porównanie rozdzielczości** — model *{selected_models[0]}*, {n_r} rozdzielczości")
@@ -277,28 +263,27 @@ with active_container:
     st.markdown("---")
     st.subheader("Wyniki segmentacji")
 
-    # Clear old results if parameters change (uses the original selection)
+    # clear old results if parameters change (uses the original selection)
     current_params = f"{selected_models}_{selected_res}"
     if st.session_state.get("last_params") != current_params:
         st.session_state.pop("seg_results", None)
         st.session_state["last_params"] = current_params
 
-    # Start button logic - disabled while the selection is invalid
+    # start button logic - disabled while the selection is invalid
     if st.button("Uruchom segmentację", type="primary",
                  disabled=bool(blockers)):
         st.session_state["seg_running"] = True
         st.session_state.pop("seg_results", None)
 
     if blockers:
-        # Invalid selection: make sure nothing keeps "running" and no result
-        # computed for an older, valid selection stays on screen.
+        # invalid selection: make sure nothing keeps "running" and there is no older result
         st.session_state["seg_running"] = False
         st.session_state.pop("seg_results", None)
         st.stop()
 
     running = st.session_state.get("seg_running", False)
 
-    # Placeholder for the Stop button (only visible during execution)
+    # placeholder for the Stop button (only visible during execution)
     stop_button_placeholder = st.empty()
 
     if running and "seg_results" not in st.session_state:
@@ -308,13 +293,11 @@ with active_container:
                 st.warning("Segmentacja została zatrzymana przez użytkownika.")
                 st.stop()
 
-    # Stop execution if not running and no results available
+    # stop execution if not running and no results available
     if not running and "seg_results" not in st.session_state:
         st.stop()
 
-    # ==========================================
-    # 1. INFERENCE EXECUTION
-    # ==========================================
+    # inference
     if "seg_results" not in st.session_state:
 
         # one model, one or more resolutions
@@ -355,7 +338,7 @@ with active_container:
             if not results:
                 st.stop()
 
-            # Save results to session state
+            # save results to session state
             st.session_state["seg_results"] = {"type": "res_compare", "model": model_name, "data": results}
 
         # more models, one resolution
@@ -391,21 +374,19 @@ with active_container:
 
             if model_results:
                 img_input = rescale(img_np, actual_scale)
-                # Save results to session state
+                # save results to session state
                 st.session_state["seg_results"] = {"type": "model_compare", "img_input": img_input,
                                                    "data": model_results}
 
-        # Clear running flag and remove the stop button immediately after inference
+        # clear running flag and remove the stop button immediately after inference
         st.session_state["seg_running"] = False
         stop_button_placeholder.empty()
 
-    # ==========================================
-    # 2. RENDERING RESULTS & EXPORT
-    # ==========================================
+    # render results and export
     if "seg_results" in st.session_state:
         res = st.session_state["seg_results"]
 
-        # --- Display Results ---
+        # display results
         if res["type"] == "res_compare":
             data = res["data"]
             model_name = res["model"]
@@ -417,15 +398,11 @@ with active_container:
                 else:
                     render_result_block(r["img"], r["mask"], label=label)
             else:
-                # WYZWANIE DLA NOWEJ FUNKCJI: Porównanie rozdzielczości
-                from utils.display import render_comparison
-
+                # compare resolutions
                 render_comparison("Rozdzielczość", model_name, data, mask_gt=mask_gt)
 
         elif res["type"] == "model_compare":
             res_label = selected_res[0]
-            # WYZWANIE DLA NOWEJ FUNKCJI: Porównanie modeli
-            from utils.display import render_comparison
-
+            # compare models
             render_comparison("Model", res_label, res["data"], img_input=res["img_input"], mask_gt=mask_gt)
 

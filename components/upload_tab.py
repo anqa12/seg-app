@@ -23,7 +23,7 @@ def _clear_upload() -> None:
     for key in keys_to_clear:
         st.session_state.pop(key, None)
 
-    # Increment key to completely reset the st.file_uploader widget
+    # increment key to reset the st.file_uploader widget
     st.session_state["_upload_widget_key"] = st.session_state.get("_upload_widget_key", 0) + 1
 
 
@@ -33,7 +33,7 @@ def render_upload_tab() -> None:
     Detects resolution from metadata or asks the user to provide this information when it is missing)
     """
 
-    # Upload your own image + detect resolution from the metadata (if available)
+    # upload your own image + detect resolution from the metadata (if available)
     widget_key = f"upload_file_{st.session_state.get('_upload_widget_key', 0)}"
     uploaded = st.file_uploader(
         "Wgraj zdjęcie (JPG, PNG, TIF):",
@@ -44,7 +44,7 @@ def render_upload_tab() -> None:
     if uploaded is not None:
         file_id = getattr(uploaded, "file_id", None) or f"{uploaded.name}_{uploaded.size}"
 
-        # Process the file iff new one was uploaded
+        # process the file iff new one was uploaded
         if st.session_state.get("_upload_processed_file_id") != file_id:
             img_np, detected_res = load_image_from_upload(uploaded)
             if img_np is not None:
@@ -61,10 +61,10 @@ def render_upload_tab() -> None:
                     st.session_state["_upload_native_label"] = native_label
                 else:
 
-                    # If no metadata, specify source_res
+                    # if no metadata, specify source_res
                     st.session_state["source_res"] = None
 
-    # Preview
+    # preview
     if st.session_state.get("_upload_img_np") is not None:
         img_np = st.session_state["_upload_img_np"]
         detected_res = st.session_state.get("_upload_detected_res")
@@ -84,7 +84,7 @@ def render_upload_tab() -> None:
                 st.warning("Nie wykryto rozdzielczości z metadanych.")
                 st.markdown("**Podaj rozdzielczość źródłową (m/px):**")
 
-                # Manual resolution
+                # manual resolution
                 manual_str = st.text_input(
                     "Rozdzielczość (m/px)",
                     value=str(st.session_state.get("_upload_manual_res", "")),

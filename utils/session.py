@@ -51,12 +51,13 @@ def set_native_resolution(value: float) -> str:
     for old in [n for n in resolutions if n.startswith("wykryta:")]:
         del resolutions[old]
 
-    # if a resolution with the same value already exists, reuse its label (no duplicates)
+    # if a resolution with the same value already exists, reuse its label
     rounded_value = round(value, 2)
     for existing_label, existing_value in resolutions.items():
         if round(existing_value, 2) == rounded_value:
             return existing_label
 
     label = f"wykryta: {value:.2f} m/px"
-    resolutions[label] = round(value, 4)  # for further calculations
+    # for further calculations
+    resolutions[label] = round(value, 4)
     return label
